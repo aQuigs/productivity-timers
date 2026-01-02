@@ -86,7 +86,7 @@ describe('Close Button Real Bug Test', () => {
     return card;
   }
 
-  it('should keep close buttons circular when window shrinks with 3 timers', async () => {
+  it('should keep close buttons square when window shrinks with 3 timers', async () => {
     // Add 3 timers
     const timers = timerManager.getAllTimers();
     expect(timers.length).to.equal(3);
@@ -107,11 +107,11 @@ describe('Close Button Real Bug Test', () => {
       return { width: rect.width, height: rect.height };
     });
 
-    // All buttons should be 30x30 and circular
+    // All buttons should be 36x36 and square
     initialRects.forEach(rect => {
-      expect(rect.width).to.be.closeTo(30, 1, 'Button width should be 30px');
-      expect(rect.height).to.be.closeTo(30, 1, 'Button height should be 30px');
-      expect(Math.abs(rect.width - rect.height)).to.be.lessThan(1, 'Button should be circular');
+      expect(rect.width).to.be.closeTo(36, 1, 'Button width should be 36px');
+      expect(rect.height).to.be.closeTo(36, 1, 'Button height should be 36px');
+      expect(Math.abs(rect.width - rect.height)).to.be.lessThan(1, 'Button should be square');
     });
 
     // Simulate narrow window by constraining the container
@@ -128,14 +128,14 @@ describe('Close Button Real Bug Test', () => {
     });
 
     // THIS IS WHERE THE BUG SHOWS UP
-    // Buttons should STILL be 30x30 and circular
+    // Buttons should STILL be 36x36 and square
     resizedRects.forEach((rect, index) => {
-      expect(rect.width).to.be.closeTo(30, 1,
-        `Button ${index} width should remain 30px after resize, got ${rect.width}`);
-      expect(rect.height).to.be.closeTo(30, 1,
-        `Button ${index} height should remain 30px after resize, got ${rect.height}`);
+      expect(rect.width).to.be.closeTo(36, 1,
+        `Button ${index} width should remain 36px after resize, got ${rect.width}`);
+      expect(rect.height).to.be.closeTo(36, 1,
+        `Button ${index} height should remain 36px after resize, got ${rect.height}`);
       expect(Math.abs(rect.width - rect.height)).to.be.lessThan(1,
-        `Button ${index} should remain circular after resize (width: ${rect.width}, height: ${rect.height})`);
+        `Button ${index} should remain square after resize (width: ${rect.width}, height: ${rect.height})`);
     });
   });
 

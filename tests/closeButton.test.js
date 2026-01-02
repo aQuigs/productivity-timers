@@ -65,7 +65,7 @@ describe('Close Button Visual Tests', () => {
   }
 
   describe('Close button shape and dimensions', () => {
-    it('should be perfectly circular on normal sized windows', () => {
+    it('should be perfectly square on normal sized windows', () => {
       const card = createTestTimerCard();
       document.getElementById('timer-container').appendChild(card);
 
@@ -73,12 +73,12 @@ describe('Close Button Visual Tests', () => {
       const styles = window.getComputedStyle(removeBtn);
       const rect = removeBtn.getBoundingClientRect();
 
-      expect(styles.borderRadius).to.equal('50%');
+      expect(styles.borderRadius).to.equal('8px');
       expect(Math.abs(rect.width - rect.height)).to.be.lessThan(1,
-        'Button should be circular (width === height)');
+        'Button should be square (width === height)');
     });
 
-    it('should maintain circular shape with very small card width', () => {
+    it('should maintain square shape with very small card width', () => {
       const card = createTestTimerCard();
       card.style.width = '200px';
       document.getElementById('timer-container').appendChild(card);
@@ -87,12 +87,12 @@ describe('Close Button Visual Tests', () => {
       const rect = removeBtn.getBoundingClientRect();
 
       expect(Math.abs(rect.width - rect.height)).to.be.lessThan(1,
-        'Button should remain circular even in narrow containers');
-      expect(rect.width).to.be.at.least(30, 'Button should maintain minimum size');
-      expect(rect.height).to.be.at.least(30, 'Button should maintain minimum size');
+        'Button should remain square even in narrow containers');
+      expect(rect.width).to.be.at.least(36, 'Button should maintain minimum size');
+      expect(rect.height).to.be.at.least(36, 'Button should maintain minimum size');
     });
 
-    it('should maintain circular shape with extremely long title text', () => {
+    it('should maintain square shape with extremely long title text', () => {
       const longTitle = 'A'.repeat(50);
       const card = createTestTimerCard(longTitle);
       document.getElementById('timer-container').appendChild(card);
@@ -101,7 +101,7 @@ describe('Close Button Visual Tests', () => {
       const rect = removeBtn.getBoundingClientRect();
 
       expect(Math.abs(rect.width - rect.height)).to.be.lessThan(1,
-        'Button should remain circular even with very long titles');
+        'Button should remain square even with very long titles');
     });
 
     it('should have correct width and height styles', () => {
@@ -111,10 +111,10 @@ describe('Close Button Visual Tests', () => {
       const removeBtn = card.querySelector('.timer-remove');
       const styles = window.getComputedStyle(removeBtn);
 
-      expect(styles.width).to.equal('30px');
-      expect(styles.height).to.equal('30px');
-      expect(styles.minWidth).to.equal('30px');
-      expect(styles.minHeight).to.equal('30px');
+      expect(styles.width).to.equal('36px');
+      expect(styles.height).to.equal('36px');
+      expect(styles.minWidth).to.equal('36px');
+      expect(styles.minHeight).to.equal('36px');
     });
   });
 
@@ -224,8 +224,8 @@ describe('Close Button Visual Tests', () => {
       const removeBtn = card.querySelector('.timer-remove');
       const styles = window.getComputedStyle(removeBtn);
 
-      expect(styles.backgroundColor).to.match(/rgb\(255,\s*71,\s*87\)/,
-        'Button should have #ff4757 background (red)');
+      expect(styles.backgroundColor).to.match(/rgba?\(239,\s*68,\s*68/,
+        'Button should have red background color from dark theme');
     });
 
     it('should center the × symbol', () => {
