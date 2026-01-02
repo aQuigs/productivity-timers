@@ -33,7 +33,7 @@ repos:
         files: \.(md|mdown|markdown)$
       - id: run-tests
         name: Run JavaScript Tests
-        entry: npm test
+        entry: bash -c 'npm test'
         language: system
         pass_filenames: false
         files: \.(js|html|css)$
