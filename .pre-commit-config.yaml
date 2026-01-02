@@ -31,3 +31,10 @@ repos:
         entry: markdownlint -c ./.markdownlintrc --ignore claude-code --ignore .claude --ignore specs --ignore .specify
         language: system
         files: \.(md|mdown|markdown)$
+      - id: run-tests
+        name: Run JavaScript Tests
+        entry: npm test
+        language: system
+        pass_filenames: false
+        files: \.(js|html|css)$
+        stages: [pre-commit]
