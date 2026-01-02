@@ -11,6 +11,8 @@ class App {
     this.addTimerBtn = document.getElementById('add-timer-btn');
     this.updateInterval = null;
     this.timerElements = new Map();
+    this.lastDisplayedValues = new Map();
+    this.rafId = null;
   }
 
   /**
@@ -32,12 +34,14 @@ class App {
   renderAllTimers() {
     this.timerContainer.innerHTML = '';
     this.timerElements.clear();
+    this.lastDisplayedValues.clear();
 
     const timers = this.timerManager.getAllTimers();
     timers.forEach(timer => {
       const timerCard = this.createTimerCard(timer);
       this.timerContainer.appendChild(timerCard);
       this.timerElements.set(timer.id, timerCard);
+      this.lastDisplayedValues.set(timer.id, timer.getFormattedTime());
     });
 
     this.updateAddTimerButton();
@@ -110,9 +114,11 @@ class App {
    * Start the timer display update loop
    */
   startUpdateLoop() {
-    this.updateInterval = setInterval(() => {
+    const updateFrame = () => {
       this.updateAllTimerDisplays();
-    }, 1000);
+      this.rafId = requestAnimationFrame(updateFrame);
+    };
+    this.rafId = requestAnimationFrame(updateFrame);
   }
 
   /**
@@ -123,8 +129,14 @@ class App {
     timers.forEach(timer => {
       const card = this.timerElements.get(timer.id);
       if (card) {
-        const display = card.querySelector('.timer-display');
-        display.textContent = timer.getFormattedTime();
+        const newFormattedTime = timer.getFormattedTime();
+        const lastDisplayed = this.lastDisplayedValues.get(timer.id);
+
+        if (newFormattedTime !== lastDisplayed) {
+          const display = card.querySelector('.timer-display');
+          display.textContent = newFormattedTime;
+          this.lastDisplayedValues.set(timer.id, newFormattedTime);
+        }
 
         const toggleBtn = card.querySelector('.btn');
         toggleBtn.className = timer.isRunning() ? 'btn btn-pause' : 'btn btn-start';
@@ -199,6 +211,7 @@ class App {
     const timerCard = this.createTimerCard(newTimer);
     this.timerContainer.appendChild(timerCard);
     this.timerElements.set(newTimer.id, timerCard);
+    this.lastDisplayedValues.set(newTimer.id, newTimer.getFormattedTime());
 
     this.updateRemoveButtons();
     this.updateAddTimerButton();
@@ -220,6 +233,7 @@ class App {
       if (card) {
         card.remove();
         this.timerElements.delete(timerId);
+        this.lastDisplayedValues.delete(timerId);
       }
 
       this.updateRemoveButtons();

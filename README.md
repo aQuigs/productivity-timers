@@ -19,7 +19,7 @@ A browser-based time tracker with multiple timers that function like a chess clo
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/[username]/timers.git
+   git clone https://github.com/aQuigs/timers.git
    cd timers
    ```
 
@@ -108,7 +108,7 @@ The app automatically deploys to GitHub Pages when you push to the `main` branch
 1. Push changes to `main`
 2. GitHub Actions runs tests
 3. If tests pass, deploys to GitHub Pages
-4. Site available at `https://[username].github.io/timers`
+4. Site available at `https://aQuigs.github.io/timers`
 
 ## Browser Support
 

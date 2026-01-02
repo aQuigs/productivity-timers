@@ -69,7 +69,7 @@ node --version  # Should be v18+
 npm --version   # Should be v9+
 
 # Clone the repository
-git clone https://github.com/[username]/timers.git
+git clone https://github.com/aQuigs/timers.git
 cd timers
 ```
 
@@ -324,7 +324,7 @@ Once PR is approved and tests pass:
 **Process**:
 1. GitHub Actions runs tests
 2. If tests pass, deploys to GitHub Pages
-3. Site available at `https://[username].github.io/timers`
+3. Site available at `https://aQuigs.github.io/timers`
 
 **Configuration** (`.github/workflows/deploy.yml`):
 ```yaml
