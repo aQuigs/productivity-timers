@@ -1,8 +1,8 @@
-name: Test and Deploy
+name: Test
 
 on:
   push:
-    branches: [main, 001-time-tracker]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -27,28 +27,3 @@ jobs:
 
       - name: Run tests
         run: npm test
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
