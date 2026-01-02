@@ -93,9 +93,16 @@ header h1 {
     border-radius: 50%;
     width: 30px;
     height: 30px;
+    min-width: 30px;
+    min-height: 30px;
     cursor: pointer;
     font-size: 18px;
     line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     transition: background 0.2s;
 }
 
