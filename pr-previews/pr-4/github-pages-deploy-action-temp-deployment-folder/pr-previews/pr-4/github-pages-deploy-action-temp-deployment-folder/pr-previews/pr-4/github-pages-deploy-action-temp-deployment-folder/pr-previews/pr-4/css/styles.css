@@ -187,13 +187,13 @@ header h1 {
 }
 
 .timer-display {
-    font-size: clamp(2rem, 8vw, 3.5rem);
+    font-size: 3.5rem;
     font-weight: 700;
     text-align: center;
     color: var(--text-primary);
     font-family: 'SF Mono', 'Courier New', monospace;
     margin-bottom: 24px;
-    letter-spacing: clamp(1px, 0.5vw, 4px);
+    letter-spacing: 4px;
     text-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
     padding: 16px;
     background: rgba(99, 102, 241, 0.05);
