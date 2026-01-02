@@ -36,3 +36,5 @@ jobs:
           publish_dir: ./
           publish_branch: gh-pages
           destination_dir: ./
+          keep_files: true
+          exclude_assets: '.github'
