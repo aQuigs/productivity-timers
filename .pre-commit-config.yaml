@@ -1,3 +1,4 @@
+exclude: '^(\.specify/|\.claude/)'
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -27,6 +28,6 @@ repos:
     hooks:
       - id: check-markdown
         name: check-markdown
-        entry: markdownlint -c ./.markdownlintrc --ignore claude-code --ignore .claude
+        entry: markdownlint -c ./.markdownlintrc --ignore claude-code --ignore .claude --ignore specs --ignore .specify
         language: system
         files: \.(md|mdown|markdown)$
