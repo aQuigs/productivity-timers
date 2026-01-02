@@ -23,5 +23,8 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
       - name: Run pre-commit hooks
         uses: pre-commit/action@v3.0.1
