@@ -126,16 +126,20 @@ describe('Layout and Overflow Tests', () => {
     it('should have a maximum width regardless of window size', () => {
       const card = createTestTimerCard();
       const timerContainer = document.getElementById('timer-container');
+      const appContainer = document.querySelector('.app-container');
 
       // Simulate very large window
-      timerContainer.style.width = '2000px';
+      appContainer.style.width = '2000px';
       timerContainer.appendChild(card);
+
+      // Force reflow
+      timerContainer.offsetHeight;
 
       const cardRect = card.getBoundingClientRect();
 
-      // Timer card should not exceed a reasonable max width (e.g., 400-500px)
-      expect(cardRect.width).to.be.at.most(500,
-        'Timer card should not stretch beyond max width even on large screens');
+      // Timer card should not exceed a reasonable max width (e.g., 400-450px)
+      expect(cardRect.width).to.be.at.most(450,
+        `Timer card should not stretch beyond max width even on large screens, got ${cardRect.width}px`);
     });
 
     it('should only grow the grid, not individual cards, on wide screens', () => {

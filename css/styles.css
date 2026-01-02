@@ -66,9 +66,10 @@ header h1 {
 
 .timer-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 450px));
     gap: 24px;
     margin-bottom: 40px;
+    justify-content: center;
 }
 
 .timer-card {
