@@ -76,6 +76,8 @@ header h1 {
     border-radius: 16px;
     padding: 32px;
     width: 100%;
+    max-width: 450px;
+    justify-self: center;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-md);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -197,6 +199,8 @@ header h1 {
     background: rgba(99, 102, 241, 0.05);
     border-radius: 12px;
     border: 1px solid rgba(99, 102, 241, 0.1);
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 .timer-card.active .timer-display {
