@@ -50,8 +50,6 @@ header h1 {
     max-width: 400px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     transition: transform 0.2s, box-shadow 0.2s;
-    min-width: 0;
-    overflow: hidden;
 }
 
 .timer-card:hover {
@@ -71,6 +69,7 @@ header h1 {
     margin-bottom: 20px;
     gap: 10px;
     min-width: 0;
+    overflow: hidden;
 }
 
 .timer-title {
@@ -80,13 +79,12 @@ header h1 {
     border: none;
     background: transparent;
     outline: none;
-    flex: 1;
+    flex: 1 1 auto;
     padding: 5px;
     border-bottom: 2px solid transparent;
     transition: border-color 0.2s;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .timer-title:focus {
