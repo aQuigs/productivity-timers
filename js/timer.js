@@ -206,8 +206,8 @@ export class Timer {
     const timer = new Timer(data.title, data.id);
     timer.#elapsedMs = data.elapsedMs;
 
-    if (data.state === 'paused') {
-      timer.#state = 'paused';
+    if (data.state === 'paused' || data.state === 'running') {
+      timer.#state = data.state;
     }
 
     return timer;
