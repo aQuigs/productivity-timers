@@ -1,4 +1,5 @@
 import { Timer } from './timer.js';
+import { StorageService } from './storageService.js';
 
 /**
  * TimerManager class - Orchestrates multiple timers and enforces mutual exclusivity
@@ -7,21 +8,65 @@ import { Timer } from './timer.js';
 export class TimerManager {
   #timers;
   #runningTimerId;
+  #storage;
 
   /**
    * Creates a new TimerManager instance with initial timers
    * @param {number} [initialCount=2] - Number of timers to create initially
+   * @param {StorageService} [storageService] - Optional storage service for persistence
    */
-  constructor(initialCount = 2) {
+  constructor(initialCount = 2, storageService = null) {
     if (initialCount < 1 || initialCount > 20) {
       throw new RangeError('Initial count must be between 1 and 20');
     }
 
+    this.#storage = storageService || new StorageService();
     this.#timers = [];
     this.#runningTimerId = null;
 
-    for (let i = 1; i <= initialCount; i++) {
-      this.#timers.push(new Timer(`Timer ${i}`));
+    const loaded = this.#loadFromStorage();
+
+    if (!loaded) {
+      for (let i = 1; i <= initialCount; i++) {
+        this.#timers.push(new Timer(`Timer ${i}`));
+      }
+    }
+  }
+
+  /**
+   * Load state from storage
+   * Note: Running timers are never restored as running because performance.now()
+   * baseline cannot be restored across page loads. They are converted to paused.
+   * @returns {boolean} Success/failure
+   */
+  #loadFromStorage() {
+    const state = this.#storage.load();
+    if (!state) {
+      return false;
+    }
+
+    try {
+      this.#timers = state.timers.map(timerData => Timer.fromJSON(timerData));
+      this.#runningTimerId = null;
+      return true;
+    } catch (error) {
+      console.error('Failed to restore timers from storage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Persist current state to storage
+   */
+  #persist() {
+    const state = {
+      timers: this.#timers.map(timer => timer.toJSON()),
+      runningTimerId: this.#runningTimerId
+    };
+
+    const success = this.#storage.save(state);
+    if (!success) {
+      console.warn('Failed to save timer state to localStorage');
     }
   }
 
@@ -77,6 +122,7 @@ export class TimerManager {
 
     timer.start();
     this.#runningTimerId = id;
+    this.#persist();
     return true;
   }
 
@@ -96,6 +142,7 @@ export class TimerManager {
       this.#runningTimerId = null;
     }
 
+    this.#persist();
     return true;
   }
 
@@ -113,6 +160,7 @@ export class TimerManager {
     const timerTitle = title || `Timer ${timerNumber}`;
     const newTimer = new Timer(timerTitle);
     this.#timers.push(newTimer);
+    this.#persist();
     return newTimer;
   }
 
@@ -137,6 +185,7 @@ export class TimerManager {
     }
 
     this.#timers.splice(index, 1);
+    this.#persist();
     return true;
   }
 
@@ -147,5 +196,40 @@ export class TimerManager {
   resetAll() {
     this.#timers.forEach(timer => timer.reset());
     this.#runningTimerId = null;
+    this.#persist();
+  }
+
+  /**
+   * Updates a timer's title and persists the change
+   * @param {string} id - ID of timer to update
+   * @param {string} newTitle - New title for the timer
+   * @returns {boolean} true if updated, false if timer not found
+   * @throws {Error} If title is invalid
+   */
+  updateTimerTitle(id, newTitle) {
+    const timer = this.getTimer(id);
+    if (!timer) {
+      return false;
+    }
+
+    timer.title = newTitle;
+    this.#persist();
+    return true;
+  }
+
+  /**
+   * Resets an individual timer and persists the change
+   * @param {string} id - ID of timer to reset
+   * @returns {boolean} true if reset, false if timer not found
+   */
+  resetTimer(id) {
+    const timer = this.getTimer(id);
+    if (!timer) {
+      return false;
+    }
+
+    timer.reset();
+    this.#persist();
+    return true;
   }
 }

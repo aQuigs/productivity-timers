@@ -5,7 +5,7 @@ import { TimerManager } from './timerManager.js';
  */
 class App {
   constructor() {
-    this.timerManager = new TimerManager(2);
+    this.timerManager = new TimerManager();
     this.timerContainer = document.getElementById('timer-container');
     this.resetAllBtn = document.getElementById('reset-all-btn');
     this.addTimerBtn = document.getElementById('add-timer-btn');
@@ -183,7 +183,7 @@ class App {
     }
 
     try {
-      timer.title = newTitle;
+      this.timerManager.updateTimerTitle(timer.id, newTitle);
     } catch (error) {
       input.value = timer.title;
       alert(error.message);

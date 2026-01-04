@@ -156,4 +156,54 @@ export class Timer {
   isRunning() {
     return this.#state === 'running';
   }
+
+  /**
+   * Serializes timer to plain object for storage
+   * Running timers are converted to paused to preserve accumulated time
+   * @returns {Object}
+   */
+  toJSON() {
+    const currentElapsed = this.getElapsedMs();
+    const normalizedState = this.#state === 'running' ? 'paused' : this.#state;
+
+    return {
+      id: this.#id,
+      title: this.#title,
+      elapsedMs: currentElapsed,
+      state: normalizedState
+    };
+  }
+
+  /**
+   * Static factory method to create Timer from stored data
+   * @param {Object} data - Serialized timer data
+   * @returns {Timer}
+   * @throws {Error} If data is invalid
+   */
+  static fromJSON(data) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid timer data');
+    }
+
+    if (!data.id || typeof data.id !== 'string') {
+      throw new Error('Timer data must have a valid id');
+    }
+
+    if (!data.title || typeof data.title !== 'string') {
+      throw new Error('Timer data must have a valid title');
+    }
+
+    if (typeof data.elapsedMs !== 'number' || data.elapsedMs < 0) {
+      throw new Error('Timer data must have a valid elapsedMs');
+    }
+
+    const timer = new Timer(data.title, data.id);
+    timer.#elapsedMs = data.elapsedMs;
+
+    if (data.state === 'paused') {
+      timer.#state = 'paused';
+    }
+
+    return timer;
+  }
 }

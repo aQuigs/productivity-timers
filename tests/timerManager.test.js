@@ -1,7 +1,16 @@
 import { expect } from '@esm-bundle/chai';
 import { TimerManager } from '../js/timerManager.js';
+import { StorageService } from '../js/storageService.js';
 
 describe('TimerManager', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
   describe('Constructor', () => {
     it('should create manager with 2 default timers', () => {
       const manager = new TimerManager();
@@ -220,6 +229,183 @@ describe('TimerManager', () => {
           done();
         }, 50);
       }, 50);
+    });
+  });
+
+  describe('Persistence - updateTimerTitle()', () => {
+    it('should update timer title and persist', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+      const timerId = timers[0].id;
+
+      const result = manager.updateTimerTitle(timerId, 'New Title');
+
+      expect(result).to.be.true;
+      expect(manager.getTimer(timerId).title).to.equal('New Title');
+
+      const loaded = storage.load();
+      expect(loaded.timers[0].title).to.equal('New Title');
+    });
+
+    it('should return false for invalid timer id', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+
+      const result = manager.updateTimerTitle('invalid-id', 'New Title');
+      expect(result).to.be.false;
+    });
+
+    it('should throw error for invalid title', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+
+      expect(() => manager.updateTimerTitle(timers[0].id, '')).to.throw();
+    });
+  });
+
+  describe('Persistence - resetTimer()', () => {
+    it('should reset individual timer and persist', (done) => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+      const timerId = timers[0].id;
+
+      manager.startTimer(timerId);
+      setTimeout(() => {
+        const result = manager.resetTimer(timerId);
+
+        expect(result).to.be.true;
+        expect(manager.getTimer(timerId).getElapsedMs()).to.equal(0);
+
+        const loaded = storage.load();
+        expect(loaded.timers[0].elapsedMs).to.equal(0);
+        done();
+      }, 50);
+    });
+
+    it('should return false for invalid timer id', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+
+      const result = manager.resetTimer('invalid-id');
+      expect(result).to.be.false;
+    });
+  });
+
+  describe('Persistence - Storage Integration', () => {
+    let storage;
+
+    beforeEach(() => {
+      storage = new StorageService();
+    });
+
+    it('should load timers from storage on construction', () => {
+      const manager1 = new TimerManager(2, storage);
+      const timers1 = manager1.getAllTimers();
+      timers1[0].title = 'Custom Timer';
+      manager1.startTimer(timers1[0].id);
+
+      const manager2 = new TimerManager(2, storage);
+      const timers2 = manager2.getAllTimers();
+
+      expect(timers2).to.have.lengthOf(2);
+      expect(timers2[0].title).to.equal('Custom Timer');
+    });
+
+    it('should persist when starting timer', () => {
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+      const timerId = timers[0].id;
+
+      manager.startTimer(timerId);
+
+      const loaded = storage.load();
+      expect(loaded.runningTimerId).to.equal(timerId);
+    });
+
+    it('should persist when pausing timer', (done) => {
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+      const timerId = timers[0].id;
+
+      manager.startTimer(timerId);
+      setTimeout(() => {
+        manager.pauseTimer(timerId);
+
+        const loaded = storage.load();
+        expect(loaded.runningTimerId).to.be.null;
+        expect(loaded.timers[0].state).to.equal('paused');
+        done();
+      }, 50);
+    });
+
+    it('should persist when adding timer', () => {
+      const manager = new TimerManager(2, storage);
+      manager.addTimer('New Timer');
+
+      const loaded = storage.load();
+      expect(loaded.timers).to.have.lengthOf(3);
+      expect(loaded.timers[2].title).to.equal('New Timer');
+    });
+
+    it('should persist when removing timer', () => {
+      const manager = new TimerManager(3, storage);
+      const timers = manager.getAllTimers();
+      const removeId = timers[1].id;
+
+      manager.removeTimer(removeId);
+
+      const loaded = storage.load();
+      expect(loaded.timers).to.have.lengthOf(2);
+      expect(loaded.timers.some(t => t.id === removeId)).to.be.false;
+    });
+
+    it('should persist when resetting all', (done) => {
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+
+      manager.startTimer(timers[0].id);
+      setTimeout(() => {
+        manager.resetAll();
+
+        const loaded = storage.load();
+        expect(loaded.runningTimerId).to.be.null;
+        expect(loaded.timers[0].elapsedMs).to.equal(0);
+        done();
+      }, 50);
+    });
+
+    it('should restore running timers as paused', () => {
+      const manager1 = new TimerManager(2, storage);
+      const timers1 = manager1.getAllTimers();
+      manager1.startTimer(timers1[0].id);
+
+      const manager2 = new TimerManager(2, storage);
+      const timers2 = manager2.getAllTimers();
+
+      expect(timers2[0].state).to.equal('paused');
+      expect(manager2.getRunningTimer()).to.be.null;
+    });
+
+    it('should initialize with defaults if storage is empty', () => {
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+
+      expect(timers).to.have.lengthOf(2);
+      expect(timers[0].title).to.equal('Timer 1');
+      expect(timers[1].title).to.equal('Timer 2');
+    });
+
+    it('should fall back to defaults if storage is corrupted', () => {
+      localStorage.setItem('productivity-timers-v1', 'corrupted data');
+
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+
+      expect(timers).to.have.lengthOf(2);
+      expect(timers[0].title).to.equal('Timer 1');
     });
   });
 });
