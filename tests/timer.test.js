@@ -324,6 +324,17 @@ describe('Timer', () => {
         expect(() => Timer.fromJSON(data)).to.throw(Error);
       });
 
+      it('should throw error for negative elapsedMs', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: -1000,
+          state: 'stopped'
+        };
+
+        expect(() => Timer.fromJSON(data)).to.throw(Error);
+      });
+
       it('should throw error for missing state', () => {
         const data = {
           id: 'abc-123',
