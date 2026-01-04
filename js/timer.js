@@ -3,6 +3,8 @@
  * Uses performance.now() for high-resolution, monotonic timing
  */
 export class Timer {
+  static VALID_STATES = ['stopped', 'paused', 'running'];
+
   #id;
   #title;
   #elapsedMs;
@@ -197,8 +199,7 @@ export class Timer {
       throw new Error('Timer data must have a valid state');
     }
 
-    const validStates = ['stopped', 'paused', 'running'];
-    if (!validStates.includes(data.state)) {
+    if (!Timer.VALID_STATES.includes(data.state)) {
       throw new Error('Timer state must be one of: stopped, paused, running');
     }
 

@@ -1,3 +1,5 @@
+import { Timer } from './timer.js';
+
 /**
  * StorageService - Handles localStorage persistence for timer state
  * Provides serialization, validation, and error handling
@@ -180,8 +182,7 @@ export class StorageService {
     }
 
     // Validate state is one of valid values
-    const validStates = ['stopped', 'running', 'paused'];
-    if (!validStates.includes(timer.state)) {
+    if (!Timer.VALID_STATES.includes(timer.state)) {
       return false;
     }
 
