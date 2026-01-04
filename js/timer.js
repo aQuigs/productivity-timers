@@ -9,21 +9,25 @@ export class Timer {
   #state;
   #startTimeMs;
 
+  #validateTitle(value) {
+    if (typeof value !== 'string') {
+      throw new TypeError('Title must be a string');
+    }
+    if (value.length === 0) {
+      throw new RangeError('Title cannot be empty');
+    }
+    if (value.length > 50) {
+      throw new RangeError('Title cannot exceed 50 characters');
+    }
+  }
+
   /**
    * Creates a new Timer instance
    * @param {string} title - Initial title for the timer
    * @param {string} [id] - Optional unique identifier (auto-generated if not provided)
    */
   constructor(title, id) {
-    if (typeof title !== 'string') {
-      throw new TypeError('Title must be a string');
-    }
-    if (title.length > 50) {
-      throw new RangeError('Title cannot exceed 50 characters');
-    }
-    if (title.length === 0) {
-      throw new RangeError('Title cannot be empty');
-    }
+    this.#validateTitle(title);
 
     this.#id = id || crypto.randomUUID();
     this.#title = title;
@@ -47,15 +51,7 @@ export class Timer {
   }
 
   set title(value) {
-    if (typeof value !== 'string') {
-      throw new TypeError('Title must be a string');
-    }
-    if (value.length === 0) {
-      throw new RangeError('Title cannot be empty');
-    }
-    if (value.length > 50) {
-      throw new RangeError('Title cannot exceed 50 characters');
-    }
+    this.#validateTitle(value);
     this.#title = value;
   }
 
