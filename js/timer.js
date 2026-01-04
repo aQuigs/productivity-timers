@@ -3,11 +3,25 @@
  * Uses performance.now() for high-resolution, monotonic timing
  */
 export class Timer {
+  static VALID_STATES = ['stopped', 'paused', 'running'];
+
   #id;
   #title;
   #elapsedMs;
   #state;
   #startTimeMs;
+
+  #validateTitle(value) {
+    if (typeof value !== 'string') {
+      throw new TypeError('Title must be a string');
+    }
+    if (value.length === 0) {
+      throw new RangeError('Title cannot be empty');
+    }
+    if (value.length > 50) {
+      throw new RangeError('Title cannot exceed 50 characters');
+    }
+  }
 
   /**
    * Creates a new Timer instance
@@ -15,15 +29,7 @@ export class Timer {
    * @param {string} [id] - Optional unique identifier (auto-generated if not provided)
    */
   constructor(title, id) {
-    if (typeof title !== 'string') {
-      throw new TypeError('Title must be a string');
-    }
-    if (title.length > 50) {
-      throw new RangeError('Title cannot exceed 50 characters');
-    }
-    if (title.length === 0) {
-      throw new RangeError('Title cannot be empty');
-    }
+    this.#validateTitle(title);
 
     this.#id = id || crypto.randomUUID();
     this.#title = title;
@@ -47,15 +53,7 @@ export class Timer {
   }
 
   set title(value) {
-    if (typeof value !== 'string') {
-      throw new TypeError('Title must be a string');
-    }
-    if (value.length === 0) {
-      throw new RangeError('Title cannot be empty');
-    }
-    if (value.length > 50) {
-      throw new RangeError('Title cannot exceed 50 characters');
-    }
+    this.#validateTitle(value);
     this.#title = value;
   }
 
@@ -155,5 +153,65 @@ export class Timer {
    */
   isRunning() {
     return this.#state === 'running';
+  }
+
+  /**
+   * Serializes timer to plain object for storage
+   * Running timers are converted to paused to preserve accumulated time
+   * @returns {Object}
+   */
+  toJSON() {
+    const currentElapsed = this.getElapsedMs();
+    const normalizedState = this.#state === 'running' ? 'paused' : this.#state;
+
+    return {
+      id: this.#id,
+      title: this.#title,
+      elapsedMs: currentElapsed,
+      state: normalizedState
+    };
+  }
+
+  /**
+   * Static factory method to create Timer from stored data
+   * @param {Object} data - Serialized timer data
+   * @returns {Timer}
+   * @throws {Error} If data is invalid
+   */
+  static fromJSON(data) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid timer data');
+    }
+
+    if (!data.id || typeof data.id !== 'string') {
+      throw new Error('Timer data must have a valid id');
+    }
+
+    if (!data.title || typeof data.title !== 'string') {
+      throw new Error('Timer data must have a valid title');
+    }
+
+    if (typeof data.elapsedMs !== 'number' || data.elapsedMs < 0) {
+      throw new Error('Timer data must have a valid elapsedMs');
+    }
+
+    if (!data.state || typeof data.state !== 'string') {
+      throw new Error('Timer data must have a valid state');
+    }
+
+    if (!Timer.VALID_STATES.includes(data.state)) {
+      throw new Error('Timer state must be one of: stopped, paused, running');
+    }
+
+    const timer = new Timer(data.title, data.id);
+    timer.#elapsedMs = data.elapsedMs;
+
+    // Restore paused state; running is converted to paused since performance.now()
+    // baseline cannot be restored across deserialization boundaries
+    if (data.state === 'paused' || data.state === 'running') {
+      timer.#state = 'paused';
+    }
+
+    return timer;
   }
 }
