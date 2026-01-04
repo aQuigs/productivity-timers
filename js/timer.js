@@ -193,6 +193,15 @@ export class Timer {
       throw new Error('Timer data must have a valid elapsedMs');
     }
 
+    if (!data.state || typeof data.state !== 'string') {
+      throw new Error('Timer data must have a valid state');
+    }
+
+    const validStates = ['stopped', 'paused', 'running'];
+    if (!validStates.includes(data.state)) {
+      throw new Error('Timer state must be one of: stopped, paused, running');
+    }
+
     const timer = new Timer(data.title, data.id);
     timer.#elapsedMs = data.elapsedMs;
 

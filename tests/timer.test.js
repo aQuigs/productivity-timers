@@ -307,6 +307,27 @@ describe('Timer', () => {
 
         expect(() => Timer.fromJSON(data)).to.throw(Error);
       });
+
+      it('should throw error for missing state', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: 0
+        };
+
+        expect(() => Timer.fromJSON(data)).to.throw(Error);
+      });
+
+      it('should throw error for invalid state value', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: 0,
+          state: 'invalid'
+        };
+
+        expect(() => Timer.fromJSON(data)).to.throw(Error);
+      });
     });
 
     describe('Round-trip serialization', () => {
