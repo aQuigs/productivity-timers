@@ -13,6 +13,7 @@ class App {
     this.timerElements = new Map();
     this.lastDisplayedValues = new Map();
     this.rafId = null;
+    this.hiddenRunningTimers = new Set();
   }
 
   /**
@@ -108,6 +109,7 @@ class App {
   bindGlobalEvents() {
     this.resetAllBtn.addEventListener('click', () => this.handleResetAll());
     this.addTimerBtn.addEventListener('click', () => this.handleAddTimer());
+    document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
   }
 
   /**
@@ -263,6 +265,31 @@ class App {
   updateAddTimerButton() {
     const timers = this.timerManager.getAllTimers();
     this.addTimerBtn.disabled = timers.length >= 20;
+  }
+
+  /**
+   * Handle page visibility changes
+   * Pauses running timers when page becomes hidden and resumes them when visible
+   */
+  handleVisibilityChange() {
+    if (document.hidden) {
+      const timers = this.timerManager.getAllTimers();
+      this.hiddenRunningTimers.clear();
+
+      timers.forEach(timer => {
+        if (timer.isRunning()) {
+          this.hiddenRunningTimers.add(timer.id);
+          this.timerManager.pauseTimer(timer.id);
+        }
+      });
+    } else {
+      this.hiddenRunningTimers.forEach(timerId => {
+        this.timerManager.startTimer(timerId);
+      });
+      this.hiddenRunningTimers.clear();
+
+      this.updateAllTimerDisplays();
+    }
   }
 }
 
