@@ -206,8 +206,10 @@ export class Timer {
     const timer = new Timer(data.title, data.id);
     timer.#elapsedMs = data.elapsedMs;
 
+    // Restore paused state; running is converted to paused since performance.now()
+    // baseline cannot be restored across deserialization boundaries
     if (data.state === 'paused' || data.state === 'running') {
-      timer.#state = data.state;
+      timer.#state = 'paused';
     }
 
     return timer;

@@ -267,6 +267,22 @@ describe('Timer', () => {
         expect(timer.state).to.equal('paused');
       });
 
+      it('should convert running state to paused when restoring', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: 5000,
+          state: 'running'
+        };
+
+        const timer = Timer.fromJSON(data);
+
+        expect(timer.id).to.equal('abc-123');
+        expect(timer.title).to.equal('Restored');
+        expect(timer.getElapsedMs()).to.equal(5000);
+        expect(timer.state).to.equal('paused');
+      });
+
       it('should throw error for missing id', () => {
         const data = {
           title: 'Restored',
