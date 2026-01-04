@@ -28,7 +28,7 @@ repos:
     hooks:
       - id: check-markdown
         name: check-markdown
-        entry: markdownlint -c ./.markdownlintrc --ignore claude-code --ignore .claude --ignore specs --ignore .specify
+        entry: markdownlint -c ./.markdownlintrc --ignore claude-code --ignore .claude --ignore specs --ignore .specify --ignore CLAUDE.md
         language: system
         files: \.(md|mdown|markdown)$
       - id: run-tests
