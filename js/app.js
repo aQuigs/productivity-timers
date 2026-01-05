@@ -341,18 +341,14 @@ class App {
       ? Array.from(this.hiddenRunningTimers)[0]
       : null);
 
-    // ADD to existing pending idle (accumulate across multiple idle periods)
-    const existingPendingMs = parseInt(localStorage.getItem('pending_idle_duration') || '0', 10);
-    const totalIdleMs = existingPendingMs + idleMs;
-
-    // Persist accumulated idle duration in case user doesn't fill out modal and reloads
-    localStorage.setItem('pending_idle_duration', totalIdleMs.toString());
+    // Persist pending idle duration in case user doesn't fill out modal and reloads
+    localStorage.setItem('pending_idle_duration', idleMs.toString());
     if (previousRunningId) {
       localStorage.setItem('pending_idle_previous_timer', previousRunningId);
     }
 
-    // Show allocation modal with accumulated idle time
-    const modal = new AllocationModal(totalIdleMs, timers, previousRunningId);
+    // Show allocation modal
+    const modal = new AllocationModal(idleMs, timers, previousRunningId);
     const result = await modal.show();
 
     // Apply allocation based on strategy
