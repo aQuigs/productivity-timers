@@ -395,4 +395,266 @@ describe('AllocationModal', () => {
       }).catch(done);
     });
   });
+
+  describe('Fixed Distribution UI', () => {
+    it('should show time input form when fixed distribution is selected', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' },
+        { id: 'timer-3', title: 'Timer 3' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      const fixedForm = document.querySelector('.allocation-modal .fixed-distribution-form');
+      expect(fixedForm).to.exist;
+      expect(fixedForm.style.display).to.not.equal('none');
+    });
+
+    it('should display timer allocation inputs with hour/minute controls', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      const timerInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .timer-allocation-row');
+      expect(timerInputs.length).to.equal(2);
+
+      timerInputs.forEach((row, idx) => {
+        expect(row.textContent).to.include(timers[idx].title);
+        expect(row.querySelector('.hours-input')).to.exist;
+        expect(row.querySelector('.minutes-input')).to.exist;
+        expect(row.querySelector('.btn-hour-inc')).to.exist;
+        expect(row.querySelector('.btn-hour-dec')).to.exist;
+        expect(row.querySelector('.btn-min-inc')).to.exist;
+        expect(row.querySelector('.btn-min-dec')).to.exist;
+      });
+    });
+
+    it('should show remaining time and remainder timer selector', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' },
+        { id: 'timer-3', title: 'Timer 3' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      const remainingDisplay = document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time');
+      expect(remainingDisplay).to.exist;
+      expect(remainingDisplay.textContent).to.include('00:10');
+
+      const remainderSelect = document.querySelector('.allocation-modal .fixed-distribution-form .remainder-timer-select');
+      expect(remainderSelect).to.exist;
+      expect(remainderSelect.options.length).to.equal(3);
+    });
+
+    it('should update remaining time live as user changes allocations', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      const idleMs = 600000;
+      modal = new AllocationModal(idleMs, timers, null);
+      modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      setTimeout(() => {
+        const hoursInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .hours-input');
+        const minutesInputs = document.querySelectorAll('.fixed-distribution-form .minutes-input');
+        const remainingDisplay = document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time');
+
+        hoursInputs[0].value = 0;
+        minutesInputs[0].value = 5;
+        minutesInputs[0].dispatchEvent(new Event('input'));
+
+        setTimeout(() => {
+          expect(remainingDisplay.textContent).to.include('00:05');
+          done();
+        }, 50);
+      }, 50);
+    });
+
+    it('should return correct config with allocations and remainder timer', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' },
+        { id: 'timer-3', title: 'Timer 3' }
+      ];
+      const idleMs = 600000;
+      modal = new AllocationModal(idleMs, timers, null);
+      const promise = modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      setTimeout(() => {
+        const hoursInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .hours-input');
+        const minutesInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .minutes-input');
+        const remainderSelect = document.querySelector('.allocation-modal .fixed-distribution-form .remainder-timer-select');
+
+        hoursInputs[0].value = 0;
+        minutesInputs[0].value = 5;
+        hoursInputs[1].value = 0;
+        minutesInputs[1].value = 3;
+        remainderSelect.value = 'timer-3';
+
+        hoursInputs[0].dispatchEvent(new Event('input'));
+
+        const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+        applyButton.click();
+
+        promise.then(result => {
+          expect(result.strategy).to.equal('fixed-distribution');
+          expect(result.config.allocations).to.be.instanceOf(Map);
+          expect(result.config.allocations.get('timer-1')).to.equal(300000);
+          expect(result.config.allocations.get('timer-2')).to.equal(180000);
+          expect(result.config.remainderTimerId).to.equal('timer-3');
+          done();
+        }).catch(done);
+      }, 50);
+    });
+  });
+
+  describe('Percentage Distribution UI', () => {
+    it('should show percentage input form when percentage distribution is selected', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const percentageForm = document.querySelector('.allocation-modal .percentage-distribution-form');
+      expect(percentageForm).to.exist;
+      expect(percentageForm.style.display).to.not.equal('none');
+    });
+
+    it('should display percentage inputs for each timer', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input-row');
+      expect(percentageInputs.length).to.equal(2);
+
+      percentageInputs.forEach((row, idx) => {
+        expect(row.textContent).to.include(timers[idx].title);
+        expect(row.querySelector('.percentage-input')).to.exist;
+      });
+    });
+
+    it('should show total percentage and validation state', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const totalDisplay = document.querySelector('.allocation-modal .percentage-distribution-form .percentage-total');
+      expect(totalDisplay).to.exist;
+    });
+
+    it('should disable Apply button if percentages do not sum to 100%', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      percentageInputs[0].value = 50;
+      percentageInputs[1].value = 30;
+      percentageInputs[0].dispatchEvent(new Event('input'));
+
+      setTimeout(() => {
+        const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+        expect(applyButton.disabled).to.be.true;
+        done();
+      }, 50);
+    });
+
+    it('should enable Apply button when percentages sum to exactly 100%', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      percentageInputs[0].value = 60;
+      percentageInputs[1].value = 40;
+      percentageInputs[0].dispatchEvent(new Event('input'));
+
+      setTimeout(() => {
+        const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+        expect(applyButton.disabled).to.be.false;
+        done();
+      }, 50);
+    });
+
+    it('should return correct config with percentages', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      const promise = modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      percentageInputs[0].value = 60;
+      percentageInputs[1].value = 40;
+      percentageInputs[0].dispatchEvent(new Event('input'));
+
+      setTimeout(() => {
+        const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+        applyButton.click();
+
+        promise.then(result => {
+          expect(result.strategy).to.equal('percentage-distribution');
+          expect(result.config.percentages).to.be.instanceOf(Map);
+          expect(result.config.percentages.get('timer-1')).to.equal(60);
+          expect(result.config.percentages.get('timer-2')).to.equal(40);
+          done();
+        }).catch(done);
+      }, 50);
+    });
+  });
 });
