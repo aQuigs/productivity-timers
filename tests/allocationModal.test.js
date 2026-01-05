@@ -151,4 +151,92 @@ describe('AllocationModal', () => {
       expect(strategy1.disabled).to.be.false;
     });
   });
+
+  describe('Apply Button and Promise Resolution', () => {
+    it('should have an Apply button', () => {
+      modal = new AllocationModal(60000, [], null);
+      modal.show();
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      expect(applyButton).to.exist;
+      expect(applyButton.textContent).to.include('Apply');
+    });
+
+    it('should return a Promise from show()', () => {
+      modal = new AllocationModal(60000, [], null);
+      const result = modal.show();
+
+      expect(result).to.be.an.instanceof(Promise);
+    });
+
+    it('should resolve with discard strategy when Apply clicked with default selection', (done) => {
+      modal = new AllocationModal(60000, [], null);
+      const promise = modal.show();
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      applyButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('discard');
+        expect(result.config).to.be.an('object');
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve with previous-timer strategy when selected', (done) => {
+      modal = new AllocationModal(60000, [], 'timer-123');
+      const promise = modal.show();
+
+      const strategy1Radio = document.querySelector('.allocation-modal input[value="previous-timer"]');
+      strategy1Radio.checked = true;
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      applyButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('previous-timer');
+        expect(result.config.timerId).to.equal('timer-123');
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve with selected-timer strategy and chosen timer', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(60000, timers, null);
+      const promise = modal.show();
+
+      const strategy2Radio = document.querySelector('.allocation-modal input[value="selected-timer"]');
+      strategy2Radio.checked = true;
+
+      const dropdown = document.querySelector('.allocation-modal select.timer-select');
+      dropdown.value = 'timer-2';
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      applyButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('selected-timer');
+        expect(result.config.timerId).to.equal('timer-2');
+        done();
+      }).catch(done);
+    });
+
+    it('should remove modal from DOM after Apply clicked', (done) => {
+      modal = new AllocationModal(60000, [], null);
+      const promise = modal.show();
+
+      expect(document.querySelector('.allocation-modal')).to.exist;
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      applyButton.click();
+
+      promise.then(() => {
+        expect(document.querySelector('.allocation-modal')).to.not.exist;
+        done();
+      }).catch(done);
+    });
+  });
 });

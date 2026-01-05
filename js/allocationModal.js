@@ -4,6 +4,7 @@ export class AllocationModal {
     this.timers = timers;
     this.previousRunningId = previousRunningId;
     this.modalElement = null;
+    this.resolvePromise = null;
   }
 
   #formatTime(ms) {
@@ -54,7 +55,32 @@ export class AllocationModal {
     return select;
   }
 
+  #getSelectedStrategy() {
+    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
+    const strategy = selectedRadio.value;
+    const config = {};
+
+    if (strategy === 'previous-timer') {
+      config.timerId = this.previousRunningId;
+    } else if (strategy === 'selected-timer') {
+      const dropdown = this.modalElement.querySelector('select.timer-select');
+      config.timerId = dropdown.value;
+    }
+
+    return { strategy, config };
+  }
+
+  #handleApply() {
+    const result = this.#getSelectedStrategy();
+    this.modalElement.remove();
+    if (this.resolvePromise) {
+      this.resolvePromise(result);
+    }
+  }
+
   show() {
+    return new Promise((resolve) => {
+      this.resolvePromise = resolve;
     this.modalElement = document.createElement('div');
     this.modalElement.className = 'allocation-modal';
 
@@ -108,10 +134,23 @@ export class AllocationModal {
     strategiesForm.appendChild(strategy4);
     strategiesForm.appendChild(strategy5);
 
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'modal-buttons';
+
+    const applyButton = document.createElement('button');
+    applyButton.className = 'btn-apply';
+    applyButton.type = 'button';
+    applyButton.textContent = 'Apply';
+    applyButton.addEventListener('click', () => this.#handleApply());
+
+    buttonContainer.appendChild(applyButton);
+
     dialog.appendChild(title);
     dialog.appendChild(idleTimeDisplay);
     dialog.appendChild(strategiesForm);
+    dialog.appendChild(buttonContainer);
     this.modalElement.appendChild(dialog);
     document.body.appendChild(this.modalElement);
+    });
   }
 }
