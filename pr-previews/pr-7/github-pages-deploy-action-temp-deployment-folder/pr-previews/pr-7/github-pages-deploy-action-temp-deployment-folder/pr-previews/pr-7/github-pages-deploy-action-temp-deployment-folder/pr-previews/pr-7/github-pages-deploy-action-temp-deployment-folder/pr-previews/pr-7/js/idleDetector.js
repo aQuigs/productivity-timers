@@ -17,9 +17,12 @@ class IdleDetector {
         const hiddenAt = parseInt(hiddenAtStr, 10);
         const idleDuration = Date.now() - hiddenAt;
 
+        // ALWAYS clear the timestamp to prevent re-triggers
+        localStorage.removeItem(this.storageKey);
+
+        // Only invoke callback if idle exceeds threshold
         if (idleDuration > this.idleThreshold) {
           this.callback(idleDuration);
-          localStorage.removeItem(this.storageKey);
         }
       }
     } else if (document.visibilityState === 'hidden') {
