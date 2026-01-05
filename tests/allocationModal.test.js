@@ -656,5 +656,86 @@ describe('AllocationModal', () => {
         }).catch(done);
       }, 50);
     });
+
+    it('should have percentage inputs with type=number and percentage-input class', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form input[type="number"].percentage-input');
+      expect(percentageInputs.length).to.equal(2);
+    });
+
+    it('should have +/- 10% buttons for each timer', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      const incButtons = document.querySelectorAll('.allocation-modal .percentage-distribution-form .btn-percent-inc');
+      const decButtons = document.querySelectorAll('.allocation-modal .percentage-distribution-form .btn-percent-dec');
+
+      expect(incButtons.length).to.equal(2);
+      expect(decButtons.length).to.equal(2);
+      expect(incButtons[0].textContent).to.include('+ 10%');
+      expect(decButtons[0].textContent).to.include('- 10%');
+    });
+
+    it('should increment percentage by 10% when + button clicked', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      setTimeout(() => {
+        const percentageInput = document.querySelector('.allocation-modal .percentage-distribution-form .percentage-input');
+        const incButton = document.querySelector('.allocation-modal .percentage-distribution-form .btn-percent-inc');
+
+        percentageInput.value = 30;
+        incButton.click();
+
+        expect(percentageInput.value).to.equal('40');
+        done();
+      }, 50);
+    });
+
+    it('should decrement percentage by 10% when - button clicked', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.click();
+
+      setTimeout(() => {
+        const percentageInput = document.querySelector('.allocation-modal .percentage-distribution-form .percentage-input');
+        const decButton = document.querySelector('.allocation-modal .percentage-distribution-form .btn-percent-dec');
+
+        percentageInput.value = 50;
+        decButton.click();
+
+        expect(percentageInput.value).to.equal('40');
+        done();
+      }, 50);
+    });
   });
 });

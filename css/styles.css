@@ -603,9 +603,14 @@ header h1 {
     text-align: center;
 }
 
+input[type="number"].percentage-input {
+    -moz-appearance: textfield;
+}
+
 .percentage-input::-webkit-outer-spin-button,
 .percentage-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
+    -webkit-appearance: none !important;
+    display: none !important;
     margin: 0;
 }
 
