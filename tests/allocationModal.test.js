@@ -239,4 +239,116 @@ describe('AllocationModal', () => {
       }).catch(done);
     });
   });
+
+  describe('Cancel, Close Button, and ESC Key', () => {
+    it('should have a Cancel button', () => {
+      modal = new AllocationModal(60000, [], null);
+      modal.show();
+
+      const cancelButton = document.querySelector('.allocation-modal button.btn-cancel');
+      expect(cancelButton).to.exist;
+      expect(cancelButton.textContent).to.include('Cancel');
+    });
+
+    it('should have a close (X) button', () => {
+      modal = new AllocationModal(60000, [], null);
+      modal.show();
+
+      const closeButton = document.querySelector('.allocation-modal button.btn-close');
+      expect(closeButton).to.exist;
+    });
+
+    it('should resolve with discard strategy when Cancel clicked', (done) => {
+      modal = new AllocationModal(60000, [], 'timer-123');
+      const promise = modal.show();
+
+      const strategy1Radio = document.querySelector('.allocation-modal input[value="previous-timer"]');
+      strategy1Radio.checked = true;
+
+      const cancelButton = document.querySelector('.allocation-modal button.btn-cancel');
+      cancelButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('discard');
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve with discard strategy when X button clicked', (done) => {
+      modal = new AllocationModal(60000, [], 'timer-123');
+      const promise = modal.show();
+
+      const strategy1Radio = document.querySelector('.allocation-modal input[value="previous-timer"]');
+      strategy1Radio.checked = true;
+
+      const closeButton = document.querySelector('.allocation-modal button.btn-close');
+      closeButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('discard');
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve with discard strategy when ESC key pressed', (done) => {
+      modal = new AllocationModal(60000, [], 'timer-123');
+      const promise = modal.show();
+
+      const strategy1Radio = document.querySelector('.allocation-modal input[value="previous-timer"]');
+      strategy1Radio.checked = true;
+
+      const escEvent = new KeyboardEvent('keydown', { key: 'Escape' });
+      document.dispatchEvent(escEvent);
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('discard');
+        done();
+      }).catch(done);
+    });
+
+    it('should remove modal from DOM when Cancel clicked', (done) => {
+      modal = new AllocationModal(60000, [], null);
+      const promise = modal.show();
+
+      expect(document.querySelector('.allocation-modal')).to.exist;
+
+      const cancelButton = document.querySelector('.allocation-modal button.btn-cancel');
+      cancelButton.click();
+
+      promise.then(() => {
+        expect(document.querySelector('.allocation-modal')).to.not.exist;
+        done();
+      }).catch(done);
+    });
+
+    it('should remove modal from DOM when X button clicked', (done) => {
+      modal = new AllocationModal(60000, [], null);
+      const promise = modal.show();
+
+      expect(document.querySelector('.allocation-modal')).to.exist;
+
+      const closeButton = document.querySelector('.allocation-modal button.btn-close');
+      closeButton.click();
+
+      promise.then(() => {
+        expect(document.querySelector('.allocation-modal')).to.not.exist;
+        done();
+      }).catch(done);
+    });
+
+    it('should remove modal from DOM when ESC pressed', (done) => {
+      modal = new AllocationModal(60000, [], null);
+      const promise = modal.show();
+
+      expect(document.querySelector('.allocation-modal')).to.exist;
+
+      const escEvent = new KeyboardEvent('keydown', { key: 'Escape' });
+      document.dispatchEvent(escEvent);
+
+      promise.then(() => {
+        expect(document.querySelector('.allocation-modal')).to.not.exist;
+        done();
+      }).catch(done);
+    });
+  });
 });

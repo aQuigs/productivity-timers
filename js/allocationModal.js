@@ -72,15 +72,38 @@ export class AllocationModal {
 
   #handleApply() {
     const result = this.#getSelectedStrategy();
-    this.modalElement.remove();
+    this.#cleanup();
     if (this.resolvePromise) {
       this.resolvePromise(result);
+    }
+  }
+
+  #handleCancel() {
+    this.#cleanup();
+    if (this.resolvePromise) {
+      this.resolvePromise({ strategy: 'discard', config: {} });
+    }
+  }
+
+  #handleKeydown(event) {
+    if (event.key === 'Escape') {
+      this.#handleCancel();
+    }
+  }
+
+  #cleanup() {
+    document.removeEventListener('keydown', this.boundHandleKeydown);
+    if (this.modalElement && this.modalElement.parentNode) {
+      this.modalElement.remove();
     }
   }
 
   show() {
     return new Promise((resolve) => {
       this.resolvePromise = resolve;
+      this.boundHandleKeydown = (e) => this.#handleKeydown(e);
+      document.addEventListener('keydown', this.boundHandleKeydown);
+
     this.modalElement = document.createElement('div');
     this.modalElement.className = 'allocation-modal';
 
@@ -134,8 +157,20 @@ export class AllocationModal {
     strategiesForm.appendChild(strategy4);
     strategiesForm.appendChild(strategy5);
 
+    const closeButton = document.createElement('button');
+    closeButton.className = 'btn-close';
+    closeButton.type = 'button';
+    closeButton.textContent = '×';
+    closeButton.addEventListener('click', () => this.#handleCancel());
+
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'modal-buttons';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'btn-cancel';
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+    cancelButton.addEventListener('click', () => this.#handleCancel());
 
     const applyButton = document.createElement('button');
     applyButton.className = 'btn-apply';
@@ -143,8 +178,10 @@ export class AllocationModal {
     applyButton.textContent = 'Apply';
     applyButton.addEventListener('click', () => this.#handleApply());
 
+    buttonContainer.appendChild(cancelButton);
     buttonContainer.appendChild(applyButton);
 
+    dialog.appendChild(closeButton);
     dialog.appendChild(title);
     dialog.appendChild(idleTimeDisplay);
     dialog.appendChild(strategiesForm);
