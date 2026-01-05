@@ -1,7 +1,4 @@
 import { TimerManager } from './timerManager.js';
-import IdleDetector from './idleDetector.js';
-import AllocationModal from './allocationModal.js';
-import timeDistributor from './timeDistributor.js';
 
 /**
  * App module - Handles DOM initialization, rendering, and event binding
@@ -17,10 +14,6 @@ class App {
     this.lastDisplayedValues = new Map();
     this.rafId = null;
     this.hiddenRunningTimers = new Set();
-    this.idleDetector = new IdleDetector({
-      callback: (idleMs) => this.handleIdleReturn(idleMs),
-      idleThreshold: 10000
-    });
   }
 
   /**
@@ -290,92 +283,13 @@ class App {
         }
       });
     } else {
-      // Check if idle duration is below threshold - if so, auto-resume
-      // If above threshold, IdleDetector will call handleIdleReturn
-      const hiddenAtStr = localStorage.getItem('idle_detector_hidden_at');
-      if (hiddenAtStr) {
-        const hiddenAt = parseInt(hiddenAtStr, 10);
-        const idleDuration = Date.now() - hiddenAt;
-
-        // If idle <= threshold, auto-resume (IdleDetector won't trigger)
-        if (idleDuration <= 10000) {
-          this.hiddenRunningTimers.forEach(timerId => {
-            this.timerManager.startTimer(timerId);
-          });
-          this.hiddenRunningTimers.clear();
-        }
-        // If idle > threshold, IdleDetector will handle via handleIdleReturn callback
-      } else {
-        // No idle tracking, just resume
-        this.hiddenRunningTimers.forEach(timerId => {
-          this.timerManager.startTimer(timerId);
-        });
-        this.hiddenRunningTimers.clear();
-      }
+      this.hiddenRunningTimers.forEach(timerId => {
+        this.timerManager.startTimer(timerId);
+      });
+      this.hiddenRunningTimers.clear();
 
       this.updateAllTimerDisplays();
     }
-  }
-
-  /**
-   * Handle return from idle period
-   * Shows modal for time allocation if idle duration exceeds threshold
-   * @param {number} idleMs - Idle duration in milliseconds
-   */
-  async handleIdleReturn(idleMs) {
-    const timers = this.timerManager.getAllTimers();
-    const previousRunningId = this.hiddenRunningTimers.size > 0
-      ? Array.from(this.hiddenRunningTimers)[0]
-      : null;
-
-    // Show allocation modal
-    const modal = new AllocationModal(idleMs, timers, previousRunningId);
-    const result = await modal.show();
-
-    // Apply allocation based on strategy
-    let allocations = new Map();
-
-    switch (result.strategy) {
-      case 'previous-timer':
-        if (previousRunningId) {
-          allocations = timeDistributor.allocateToSingle(idleMs, previousRunningId);
-        }
-        break;
-
-      case 'selected-timer':
-        if (result.config.timerId) {
-          allocations = timeDistributor.allocateToSingle(idleMs, result.config.timerId);
-        }
-        break;
-
-      case 'fixed-distribution':
-        // TODO: Implement when modal supports fixed distribution config
-        break;
-
-      case 'percentage-distribution':
-        // TODO: Implement when modal supports percentage distribution config
-        break;
-
-      case 'discard':
-      default:
-        // No allocation
-        allocations = timeDistributor.allocateDiscard();
-        break;
-    }
-
-    // Apply allocations to timers
-    if (allocations.size > 0) {
-      this.timerManager.distributeTime(allocations);
-    }
-
-    // Resume previously running timer if it still exists
-    if (previousRunningId && this.timerManager.getTimer(previousRunningId)) {
-      this.timerManager.startTimer(previousRunningId);
-    }
-
-    // Clear tracking and update displays
-    this.hiddenRunningTimers.clear();
-    this.updateAllTimerDisplays();
   }
 }
 
