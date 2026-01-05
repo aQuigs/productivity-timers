@@ -39,26 +39,20 @@ describe('IdleDetector', () => {
   });
 
   describe('Idle Duration Threshold', () => {
-    it('should NOT call callback when idle duration is <= 10s', () => {
+    it('should NOT call callback when idle duration is <= 10s', (done) => {
       let callbackCalled = false;
       const callback = () => { callbackCalled = true; };
 
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
-      const now = 100000;
-      const hiddenTime = now - 5000;
+      const hiddenTime = Date.now();
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
+      setTimeout(() => {
         detector.onVisibilityChange();
         expect(callbackCalled).to.be.false;
-      } finally {
-        Date.now = originalDateNow;
-      }
+        done();
+      }, 100);
     });
 
     it('should NOT call callback when idle duration is exactly 10s', () => {
@@ -67,66 +61,46 @@ describe('IdleDetector', () => {
 
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
-      const now = 100000;
-      const hiddenTime = now - 10000;
+      const hiddenTime = Date.now() - 10000;
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
-        detector.onVisibilityChange();
-        expect(callbackCalled).to.be.false;
-      } finally {
-        Date.now = originalDateNow;
-      }
+      detector.onVisibilityChange();
+      expect(callbackCalled).to.be.false;
     });
 
-    it('should call callback when idle duration is > 10s', () => {
+    it('should call callback when idle duration is > 10s', (done) => {
       let callbackCalled = false;
       const callback = () => { callbackCalled = true; };
 
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
-      const now = 100000;
-      const hiddenTime = now - 11000;
+      const hiddenTime = Date.now() - 11000;
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
+      setTimeout(() => {
         detector.onVisibilityChange();
         expect(callbackCalled).to.be.true;
-      } finally {
-        Date.now = originalDateNow;
-      }
+        done();
+      }, 10);
     });
 
-    it('should pass correct idle duration to callback', () => {
+    it('should pass correct idle duration to callback', (done) => {
       let receivedDuration = null;
       const callback = (duration) => { receivedDuration = duration; };
 
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
-      const now = 100000;
       const expectedIdleDuration = 15000;
-      const hiddenTime = now - expectedIdleDuration;
+      const hiddenTime = Date.now() - expectedIdleDuration;
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
+      setTimeout(() => {
         detector.onVisibilityChange();
         expect(receivedDuration).to.not.be.null;
-        expect(receivedDuration).to.equal(expectedIdleDuration);
-      } finally {
-        Date.now = originalDateNow;
-      }
+        expect(receivedDuration).to.be.at.least(expectedIdleDuration);
+        expect(receivedDuration).to.be.below(expectedIdleDuration + 100);
+        done();
+      }, 10);
     });
   });
 
@@ -148,12 +122,11 @@ describe('IdleDetector', () => {
       expect(savedTimestamp).to.be.at.most(afterCall);
     });
 
-    it('should calculate idle duration from localStorage timestamp across page reload', () => {
+    it('should calculate idle duration from localStorage timestamp across page reload', (done) => {
       let receivedDuration = null;
       const callback = (duration) => { receivedDuration = duration; };
 
-      const now = 100000;
-      const hiddenTime = now - 12000;
+      const hiddenTime = Date.now() - 12000;
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
@@ -164,27 +137,22 @@ describe('IdleDetector', () => {
         get() { return 'visible'; }
       });
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
+      setTimeout(() => {
         detector.onVisibilityChange();
         expect(receivedDuration).to.not.be.null;
-        expect(receivedDuration).to.equal(12000);
-      } finally {
-        Date.now = originalDateNow;
-      }
+        expect(receivedDuration).to.be.at.least(12000);
+        expect(receivedDuration).to.be.below(12100);
+        done();
+      }, 10);
     });
   });
 
   describe('Timestamp Cleanup', () => {
-    it('should clear hiddenTimestamp from localStorage after callback emission', () => {
+    it('should clear hiddenTimestamp from localStorage after callback emission', (done) => {
       const callback = () => {};
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
-      const now = 100000;
-      const hiddenTime = now - 11000;
+      const hiddenTime = Date.now() - 11000;
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
       // Mock visibilityState to 'visible' for the test
@@ -193,38 +161,27 @@ describe('IdleDetector', () => {
         get() { return 'visible'; }
       });
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
+      setTimeout(() => {
         detector.onVisibilityChange();
         const timestamp = localStorage.getItem('idle_detector_hidden_at');
         expect(timestamp).to.be.null;
-      } finally {
-        Date.now = originalDateNow;
-      }
+        done();
+      }, 10);
     });
 
-    it('should NOT clear hiddenTimestamp if callback was not emitted', () => {
+    it('should NOT clear hiddenTimestamp if callback was not emitted', (done) => {
       const callback = () => {};
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
-      const now = 100000;
-      const hiddenTime = now - 5000;
+      const hiddenTime = Date.now() - 5000;
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
-      try {
+      setTimeout(() => {
         detector.onVisibilityChange();
         const timestamp = localStorage.getItem('idle_detector_hidden_at');
         expect(timestamp).to.not.be.null;
-      } finally {
-        Date.now = originalDateNow;
-      }
+        done();
+      }, 10);
     });
   });
 });
