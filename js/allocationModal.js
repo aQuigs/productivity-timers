@@ -104,90 +104,92 @@ export class AllocationModal {
       this.boundHandleKeydown = (e) => this.#handleKeydown(e);
       document.addEventListener('keydown', this.boundHandleKeydown);
 
-    this.modalElement = document.createElement('div');
-    this.modalElement.className = 'allocation-modal';
+      this.modalElement = document.createElement('div');
+      this.modalElement.className = 'allocation-modal';
 
-    const dialog = document.createElement('div');
-    dialog.className = 'modal-dialog';
+      const dialog = document.createElement('div');
+      dialog.className = 'modal-dialog';
 
-    const title = document.createElement('h2');
-    title.className = 'modal-title';
-    title.textContent = 'Allocate Idle Time';
+      const title = document.createElement('h2');
+      title.className = 'modal-title';
+      title.textContent = 'Allocate Idle Time';
 
-    const idleTimeDisplay = document.createElement('p');
-    idleTimeDisplay.className = 'idle-time-display';
-    idleTimeDisplay.textContent = `Idle time: ${this.#formatTime(this.idleMs)}`;
+      const idleTimeDisplay = document.createElement('p');
+      idleTimeDisplay.className = 'idle-time-display';
+      idleTimeDisplay.textContent = `Idle time: ${this.#formatTime(this.idleMs)}`;
 
-    const strategiesForm = document.createElement('form');
-    strategiesForm.className = 'strategies-form';
+      const strategiesForm = document.createElement('form');
+      strategiesForm.className = 'strategies-form';
 
-    const strategy1 = this.#createStrategyOption(
-      'previous-timer',
-      'Add all to previously-active timer',
-      !this.previousRunningId
-    );
+      const strategy1 = this.#createStrategyOption(
+        'previous-timer',
+        'Add all to previously-active timer',
+        !this.previousRunningId
+      );
 
-    const strategy2Container = document.createElement('div');
-    strategy2Container.className = 'strategy-option';
-    const strategy2 = this.#createStrategyOption(
-      'selected-timer',
-      'Add all to selected timer:'
-    );
-    const timerDropdown = this.#createTimerDropdown();
-    strategy2.appendChild(timerDropdown);
+      const strategy2Container = document.createElement('div');
+      strategy2Container.className = 'strategy-option';
+      const strategy2 = this.#createStrategyOption(
+        'selected-timer',
+        'Add all to selected timer:'
+      );
+      const timerDropdown = this.#createTimerDropdown();
+      strategy2.appendChild(timerDropdown);
 
-    const strategy3 = this.#createStrategyOption(
-      'fixed-distribution',
-      'Fixed time distribution'
-    );
+      const strategy3 = this.#createStrategyOption(
+        'fixed-distribution',
+        'Fixed time distribution'
+      );
 
-    const strategy4 = this.#createStrategyOption(
-      'percentage-distribution',
-      'Percentage distribution'
-    );
+      const strategy4 = this.#createStrategyOption(
+        'percentage-distribution',
+        'Percentage distribution'
+      );
 
-    const strategy5 = this.#createStrategyOption(
-      'discard',
-      'Discard idle time (no allocation)'
-    );
+      const strategy5 = this.#createStrategyOption(
+        'discard',
+        'Discard idle time (no allocation)'
+      );
 
-    strategiesForm.appendChild(strategy1);
-    strategiesForm.appendChild(strategy2);
-    strategiesForm.appendChild(strategy3);
-    strategiesForm.appendChild(strategy4);
-    strategiesForm.appendChild(strategy5);
+      strategiesForm.appendChild(strategy1);
+      strategiesForm.appendChild(strategy2);
+      strategiesForm.appendChild(strategy3);
+      strategiesForm.appendChild(strategy4);
+      strategiesForm.appendChild(strategy5);
 
-    const closeButton = document.createElement('button');
-    closeButton.className = 'btn-close';
-    closeButton.type = 'button';
-    closeButton.textContent = '×';
-    closeButton.addEventListener('click', () => this.#handleCancel());
+      const closeButton = document.createElement('button');
+      closeButton.className = 'btn-close';
+      closeButton.type = 'button';
+      closeButton.textContent = '×';
+      closeButton.addEventListener('click', () => this.#handleCancel());
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'modal-buttons';
+      const buttonContainer = document.createElement('div');
+      buttonContainer.className = 'modal-buttons';
 
-    const cancelButton = document.createElement('button');
-    cancelButton.className = 'btn-cancel';
-    cancelButton.type = 'button';
-    cancelButton.textContent = 'Cancel';
-    cancelButton.addEventListener('click', () => this.#handleCancel());
+      const cancelButton = document.createElement('button');
+      cancelButton.className = 'btn-cancel';
+      cancelButton.type = 'button';
+      cancelButton.textContent = 'Cancel';
+      cancelButton.addEventListener('click', () => this.#handleCancel());
 
-    const applyButton = document.createElement('button');
-    applyButton.className = 'btn-apply';
-    applyButton.type = 'button';
-    applyButton.textContent = 'Apply';
-    applyButton.addEventListener('click', () => this.#handleApply());
+      const applyButton = document.createElement('button');
+      applyButton.className = 'btn-apply';
+      applyButton.type = 'button';
+      applyButton.textContent = 'Apply';
+      applyButton.addEventListener('click', () => this.#handleApply());
 
-    buttonContainer.appendChild(cancelButton);
-    buttonContainer.appendChild(applyButton);
+      buttonContainer.appendChild(cancelButton);
+      buttonContainer.appendChild(applyButton);
 
-    dialog.appendChild(closeButton);
-    dialog.appendChild(title);
-    dialog.appendChild(idleTimeDisplay);
-    dialog.appendChild(strategiesForm);
-    dialog.appendChild(buttonContainer);
-    this.modalElement.appendChild(dialog);
-    document.body.appendChild(this.modalElement);
+      dialog.appendChild(closeButton);
+      dialog.appendChild(title);
+      dialog.appendChild(idleTimeDisplay);
+      dialog.appendChild(strategiesForm);
+      dialog.appendChild(buttonContainer);
+      this.modalElement.appendChild(dialog);
+      document.body.appendChild(this.modalElement);
+
+      applyButton.focus();
     });
   }
 }
