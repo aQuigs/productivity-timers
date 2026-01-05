@@ -38,4 +38,33 @@ describe('AllocationModal', () => {
       expect(title.textContent).to.include('Allocate Idle Time');
     });
   });
+
+  describe('Idle Time Display', () => {
+    it('should display idle time in HH:MM:SS format', () => {
+      modal = new AllocationModal(60000, [], null);
+      modal.show();
+
+      const idleTimeDisplay = document.querySelector('.allocation-modal .idle-time-display');
+      expect(idleTimeDisplay).to.exist;
+      expect(idleTimeDisplay.textContent).to.include('00:01:00');
+    });
+
+    it('should format idle time correctly for different durations', () => {
+      modal = new AllocationModal(3665000, [], null);
+      modal.show();
+
+      const idleTimeDisplay = document.querySelector('.allocation-modal .idle-time-display');
+      expect(idleTimeDisplay).to.exist;
+      expect(idleTimeDisplay.textContent).to.include('01:01:05');
+    });
+
+    it('should format idle time correctly for hours greater than 99', () => {
+      modal = new AllocationModal(451865000, [], null);
+      modal.show();
+
+      const idleTimeDisplay = document.querySelector('.allocation-modal .idle-time-display');
+      expect(idleTimeDisplay).to.exist;
+      expect(idleTimeDisplay.textContent).to.include('125:31:05');
+    });
+  });
 });
