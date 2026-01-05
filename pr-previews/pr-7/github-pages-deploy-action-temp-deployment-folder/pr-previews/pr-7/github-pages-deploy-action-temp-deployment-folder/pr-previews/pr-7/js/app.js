@@ -1,7 +1,7 @@
 import { TimerManager } from './timerManager.js';
 import IdleDetector from './idleDetector.js';
 import AllocationModal from './allocationModal.js';
-import timeDistributor from './timeDistributor.js';
+import { allocateToSingle, allocateDiscard } from './timeDistributor.js';
 
 /**
  * App module - Handles DOM initialization, rendering, and event binding
@@ -338,13 +338,13 @@ class App {
     switch (result.strategy) {
       case 'previous-timer':
         if (previousRunningId) {
-          allocations = timeDistributor.allocateToSingle(idleMs, previousRunningId);
+          allocations = allocateToSingle(idleMs, previousRunningId);
         }
         break;
 
       case 'selected-timer':
         if (result.config.timerId) {
-          allocations = timeDistributor.allocateToSingle(idleMs, result.config.timerId);
+          allocations = allocateToSingle(idleMs, result.config.timerId);
         }
         break;
 
@@ -359,7 +359,7 @@ class App {
       case 'discard':
       default:
         // No allocation
-        allocations = timeDistributor.allocateDiscard();
+        allocations = allocateDiscard();
         break;
     }
 
