@@ -603,6 +603,12 @@ header h1 {
     text-align: center;
 }
 
+.percentage-input::-webkit-outer-spin-button,
+.percentage-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 .btn-hour-inc,
 .btn-hour-dec,
 .btn-min-inc,
@@ -620,9 +626,23 @@ header h1 {
 .btn-hour-inc:hover,
 .btn-hour-dec:hover,
 .btn-min-inc:hover,
-.btn-min-dec:hover {
+.btn-min-dec:hover,
+.btn-percent-inc:hover,
+.btn-percent-dec:hover {
     background: rgba(99, 102, 241, 0.2);
     border-color: var(--accent-primary);
+}
+
+.btn-percent-inc,
+.btn-percent-dec {
+    padding: 6px 10px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    transition: all 0.2s;
 }
 
 .fixed-distribution-remaining {
