@@ -603,12 +603,18 @@ header h1 {
     text-align: center;
 }
 
-input[type="number"].percentage-input {
+input[type="number"].percentage-input,
+input[type="number"].hours-input,
+input[type="number"].minutes-input {
     -moz-appearance: textfield;
 }
 
 .percentage-input::-webkit-outer-spin-button,
-.percentage-input::-webkit-inner-spin-button {
+.percentage-input::-webkit-inner-spin-button,
+.hours-input::-webkit-outer-spin-button,
+.hours-input::-webkit-inner-spin-button,
+.minutes-input::-webkit-outer-spin-button,
+.minutes-input::-webkit-inner-spin-button {
     -webkit-appearance: none !important;
     display: none !important;
     margin: 0;

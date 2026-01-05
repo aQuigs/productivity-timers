@@ -488,6 +488,24 @@ describe('AllocationModal', () => {
       }, 50);
     });
 
+    it('should hide number input spinners on hours and minutes inputs', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      const hoursInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form input[type="number"].hours-input');
+      const minutesInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form input[type="number"].minutes-input');
+
+      expect(hoursInputs.length).to.equal(2);
+      expect(minutesInputs.length).to.equal(2);
+    });
+
     it('should return correct config with allocations and remainder timer', (done) => {
       const timers = [
         { id: 'timer-1', title: 'Timer 1' },
