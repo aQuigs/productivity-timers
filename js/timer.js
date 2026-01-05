@@ -120,19 +120,6 @@ export class Timer {
   }
 
   /**
-   * Adds milliseconds to the timer's accumulated time
-   * @param {number} amount - Milliseconds to add (must be non-negative)
-   * @throws {RangeError} If amount is negative
-   */
-  addMs(amount) {
-    if (amount < 0) {
-      throw new RangeError('Amount must be non-negative');
-    }
-
-    this.#elapsedMs += amount;
-  }
-
-  /**
    * Returns total elapsed time in milliseconds
    * Includes time from current running session if timer is active
    */
@@ -179,7 +166,7 @@ export class Timer {
       throw new TypeError('Milliseconds must be a number');
     }
     if (ms < 0) {
-      throw new RangeError('Milliseconds cannot be negative');
+      throw new RangeError('Amount must be non-negative');
     }
     this.#elapsedMs += ms;
   }
