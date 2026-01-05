@@ -193,5 +193,3 @@ export class AllocationModal {
     });
   }
 }
-
-export default AllocationModal;
