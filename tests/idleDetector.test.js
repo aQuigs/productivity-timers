@@ -83,5 +83,43 @@ describe('IdleDetector', () => {
         done();
       }, 10);
     });
+
+    it('should pass correct idle duration to callback', (done) => {
+      let receivedDuration = null;
+      const callback = (duration) => { receivedDuration = duration; };
+
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      const expectedIdleDuration = 15000;
+      const hiddenTime = Date.now() - expectedIdleDuration;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      setTimeout(() => {
+        detector.onVisibilityChange();
+        expect(receivedDuration).to.not.be.null;
+        expect(receivedDuration).to.be.at.least(expectedIdleDuration);
+        expect(receivedDuration).to.be.below(expectedIdleDuration + 100);
+        done();
+      }, 10);
+    });
+  });
+
+  describe('localStorage Persistence', () => {
+    it('should save hiddenTimestamp to localStorage when document becomes hidden', () => {
+      detector = new IdleDetector();
+
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get() { return 'hidden'; }
+      });
+
+      const beforeCall = Date.now();
+      detector.onVisibilityChange();
+      const afterCall = Date.now();
+
+      const savedTimestamp = parseInt(localStorage.getItem('idle_detector_hidden_at'), 10);
+      expect(savedTimestamp).to.be.at.least(beforeCall);
+      expect(savedTimestamp).to.be.at.most(afterCall);
+    });
   });
 });

@@ -21,6 +21,8 @@ class IdleDetector {
           this.callback(idleDuration);
         }
       }
+    } else if (document.visibilityState === 'hidden') {
+      localStorage.setItem(this.storageKey, Date.now().toString());
     }
   }
 
