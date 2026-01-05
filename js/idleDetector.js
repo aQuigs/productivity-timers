@@ -19,6 +19,7 @@ class IdleDetector {
 
         if (idleDuration > this.idleThreshold) {
           this.callback(idleDuration);
+          localStorage.removeItem(this.storageKey);
         }
       }
     } else if (document.visibilityState === 'hidden') {

@@ -121,5 +121,67 @@ describe('IdleDetector', () => {
       expect(savedTimestamp).to.be.at.least(beforeCall);
       expect(savedTimestamp).to.be.at.most(afterCall);
     });
+
+    it('should calculate idle duration from localStorage timestamp across page reload', (done) => {
+      let receivedDuration = null;
+      const callback = (duration) => { receivedDuration = duration; };
+
+      const hiddenTime = Date.now() - 12000;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      // Mock visibilityState to 'visible' for the test
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get() { return 'visible'; }
+      });
+
+      setTimeout(() => {
+        detector.onVisibilityChange();
+        expect(receivedDuration).to.not.be.null;
+        expect(receivedDuration).to.be.at.least(12000);
+        expect(receivedDuration).to.be.below(12100);
+        done();
+      }, 10);
+    });
+  });
+
+  describe('Timestamp Cleanup', () => {
+    it('should clear hiddenTimestamp from localStorage after callback emission', (done) => {
+      const callback = () => {};
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      const hiddenTime = Date.now() - 11000;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      // Mock visibilityState to 'visible' for the test
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get() { return 'visible'; }
+      });
+
+      setTimeout(() => {
+        detector.onVisibilityChange();
+        const timestamp = localStorage.getItem('idle_detector_hidden_at');
+        expect(timestamp).to.be.null;
+        done();
+      }, 10);
+    });
+
+    it('should NOT clear hiddenTimestamp if callback was not emitted', (done) => {
+      const callback = () => {};
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      const hiddenTime = Date.now() - 5000;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      setTimeout(() => {
+        detector.onVisibilityChange();
+        const timestamp = localStorage.getItem('idle_detector_hidden_at');
+        expect(timestamp).to.not.be.null;
+        done();
+      }, 10);
+    });
   });
 });
