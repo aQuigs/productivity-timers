@@ -351,4 +351,48 @@ describe('AllocationModal', () => {
       }).catch(done);
     });
   });
+
+  describe('Input Validation', () => {
+    it('should accept fixed distribution strategy selection', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(60000, timers, null);
+      const promise = modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.checked = true;
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      applyButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('fixed-distribution');
+        expect(result.config).to.be.an('object');
+        done();
+      }).catch(done);
+    });
+
+    it('should accept percentage distribution strategy selection', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(60000, timers, null);
+      const promise = modal.show();
+
+      const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      strategy4Radio.checked = true;
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      applyButton.click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('percentage-distribution');
+        expect(result.config).to.be.an('object');
+        done();
+      }).catch(done);
+    });
+  });
 });
