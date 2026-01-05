@@ -11,7 +11,17 @@ class IdleDetector {
   }
 
   onVisibilityChange() {
-    // Implementation will be added in next TDD cycles
+    if (document.visibilityState === 'visible') {
+      const hiddenAtStr = localStorage.getItem(this.storageKey);
+      if (hiddenAtStr) {
+        const hiddenAt = parseInt(hiddenAtStr, 10);
+        const idleDuration = Date.now() - hiddenAt;
+
+        if (idleDuration > this.idleThreshold) {
+          this.callback(idleDuration);
+        }
+      }
+    }
   }
 
   destroy() {

@@ -37,4 +37,51 @@ describe('IdleDetector', () => {
       expect(detector.idleThreshold).to.equal(5000);
     });
   });
+
+  describe('Idle Duration Threshold', () => {
+    it('should NOT call callback when idle duration is <= 10s', (done) => {
+      let callbackCalled = false;
+      const callback = () => { callbackCalled = true; };
+
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      const hiddenTime = Date.now();
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      setTimeout(() => {
+        detector.onVisibilityChange();
+        expect(callbackCalled).to.be.false;
+        done();
+      }, 100);
+    });
+
+    it('should NOT call callback when idle duration is exactly 10s', () => {
+      let callbackCalled = false;
+      const callback = () => { callbackCalled = true; };
+
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      const hiddenTime = Date.now() - 10000;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      detector.onVisibilityChange();
+      expect(callbackCalled).to.be.false;
+    });
+
+    it('should call callback when idle duration is > 10s', (done) => {
+      let callbackCalled = false;
+      const callback = () => { callbackCalled = true; };
+
+      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+
+      const hiddenTime = Date.now() - 11000;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      setTimeout(() => {
+        detector.onVisibilityChange();
+        expect(callbackCalled).to.be.true;
+        done();
+      }, 10);
+    });
+  });
 });
