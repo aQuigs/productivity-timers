@@ -156,6 +156,22 @@ export class Timer {
   }
 
   /**
+   * Adds milliseconds to the timer's elapsed time
+   * @param {number} ms - Milliseconds to add (must be non-negative)
+   * @throws {TypeError} If ms is not a number
+   * @throws {RangeError} If ms is negative
+   */
+  addMs(ms) {
+    if (typeof ms !== 'number') {
+      throw new TypeError('Milliseconds must be a number');
+    }
+    if (ms < 0) {
+      throw new RangeError('Milliseconds cannot be negative');
+    }
+    this.#elapsedMs += ms;
+  }
+
+  /**
    * Serializes timer to plain object for storage
    * Running timers are converted to paused to preserve accumulated time
    * @returns {Object}
