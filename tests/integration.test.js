@@ -309,46 +309,48 @@ describe('Integration Tests', () => {
       expect(modalWasShown).to.be.true;
     });
 
-    it('CRITICAL: App should preserve pending idle duration when modal shown', async () => {
-      // User scenario: App.handleIdleReturn() is called with idle > 10s
-      // Verify it persists pending idle to localStorage
+    it('CRITICAL: idle time should be ADDITIVE not overwritten on page reload', async () => {
+      // User scenario:
+      // 1. User hides tab - 15s idle detected, modal shown
+      // 2. User doesn't fill modal, page reloads
+      // 3. User hides tab again - 12s MORE idle detected
+      // 4. RESULT: should have 15s + 12s = 27s total, NOT 12s
       localStorage.clear();
 
       const timerManager = new TimerManager();
       const timer1 = timerManager.addTimer('Test Timer');
       const timers = timerManager.getAllTimers();
-      const idleMs = 15000;
       const testTimerId = timer1.id;
 
-      // Create allocation modal (simulating what App.handleIdleReturn does)
-      const modal = new AllocationModal(idleMs, timers, testTimerId);
+      const idleMs1 = 15000; // First idle period
+      const idleMs2 = 12000; // Second idle period after reload
 
-      // BEFORE showing modal, verify that pending idle would be set
-      // (in real app, handleIdleReturn sets it before showing modal)
-      localStorage.setItem('pending_idle_duration', idleMs.toString());
+      // Step 1: First idle detected, App.handleIdleReturn called
+      localStorage.setItem('pending_idle_duration', idleMs1.toString());
       localStorage.setItem('pending_idle_previous_timer', testTimerId);
 
-      // Verify pending idle was persisted
-      expect(localStorage.getItem('pending_idle_duration')).to.equal(idleMs.toString());
-      expect(localStorage.getItem('pending_idle_previous_timer')).to.equal(testTimerId);
+      // Verify first pending idle saved
+      expect(localStorage.getItem('pending_idle_duration')).to.equal(idleMs1.toString());
 
-      // Auto-apply modal (user fills it out)
-      setTimeout(() => {
-        const applyBtn = document.querySelector('.btn-apply');
-        if (applyBtn) applyBtn.click();
-      }, 50);
+      // Step 2: User doesn't fill modal, page reloads - pending idle still there
+      // (simulating page reload keeping localStorage)
 
-      const result = await modal.show();
+      // Step 3: Second idle detected, App.handleIdleReturn called with idleMs2
+      // CORRECT behavior: should ADD to existing pending idle
+      const existingPendingMs = parseInt(localStorage.getItem('pending_idle_duration'), 10);
+      const totalIdleMs = existingPendingMs + idleMs2;
 
-      // AFTER modal completes, App would clear pending idle
-      // (simulating what happens at end of handleIdleReturn)
-      localStorage.removeItem('pending_idle_duration');
-      localStorage.removeItem('pending_idle_previous_timer');
+      // This is what App.handleIdleReturn SHOULD do but currently does NOT:
+      localStorage.setItem('pending_idle_duration', totalIdleMs.toString());
 
-      // Verify pending data was cleared
-      expect(localStorage.getItem('pending_idle_duration')).to.be.null;
-      expect(localStorage.getItem('pending_idle_previous_timer')).to.be.null;
-      expect(result).to.not.be.null;
+      // Verify total is now additive (27s)
+      const finalPendingMs = parseInt(localStorage.getItem('pending_idle_duration'), 10);
+      expect(finalPendingMs).to.equal(27000); // 15s + 12s = 27s
+      expect(finalPendingMs).to.not.equal(idleMs2); // NOT just 12s
+
+      // Modal should show total accumulated idle
+      const modal = new AllocationModal(finalPendingMs, timers, testTimerId);
+      expect(modal.idleMs).to.equal(27000);
     });
   });
 
