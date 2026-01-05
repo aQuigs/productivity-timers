@@ -232,4 +232,26 @@ export class TimerManager {
     this.#persist();
     return true;
   }
+
+  /**
+   * Distributes time allocations to timers
+   * @param {Map<string, number>} allocations - Map of timer IDs to milliseconds
+   * @returns {boolean} true if any allocation succeeded, false if all failed
+   */
+  distributeTime(allocations) {
+    let successCount = 0;
+
+    for (const [timerId, ms] of allocations) {
+      const timer = this.getTimer(timerId);
+      if (timer) {
+        timer.addMs(ms);
+        successCount++;
+      } else {
+        console.warn(`Timer ID ${timerId} not found, skipping allocation of ${ms}ms`);
+      }
+    }
+
+    this.#persist();
+    return successCount > 0;
+  }
 }
