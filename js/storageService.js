@@ -151,6 +151,18 @@ export class StorageService {
       }
     }
 
+    // Validate hiddenAt (must be null or number)
+    if (state.hiddenAt !== undefined && state.hiddenAt !== null && typeof state.hiddenAt !== 'number') {
+      return false;
+    }
+
+    // Validate runningTimerIdBeforeHide (must be null or string)
+    if (state.runningTimerIdBeforeHide !== undefined &&
+        state.runningTimerIdBeforeHide !== null &&
+        typeof state.runningTimerIdBeforeHide !== 'string') {
+      return false;
+    }
+
     return true;
   }
 
