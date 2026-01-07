@@ -1,7 +1,7 @@
 import { TimerManager } from './timerManager.js';
 import IdleDetector from './idleDetector.js';
 import AllocationModal from './allocationModal.js';
-import { allocateToSingle, allocateDiscard } from './timeDistributor.js';
+import { allocateToSingle, allocateDiscard, allocateFixed, allocatePercentage } from './timeDistributor.js';
 
 /**
  * App module - Handles DOM initialization, rendering, and event binding
@@ -347,11 +347,19 @@ class App {
         break;
 
       case 'fixed-distribution':
-        // TODO: Implement when modal supports fixed distribution config
+        allocations = allocateFixed(
+          idleMs,
+          result.config.allocations,
+          result.config.remainderTimerId
+        );
         break;
 
       case 'percentage-distribution':
-        // TODO: Implement when modal supports percentage distribution config
+        allocations = allocatePercentage(
+          idleMs,
+          result.config.percentages,
+          result.config.remainderTimerId
+        );
         break;
 
       case 'discard':
