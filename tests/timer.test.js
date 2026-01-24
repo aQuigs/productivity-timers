@@ -395,4 +395,58 @@ describe('Timer', () => {
       });
     });
   });
+
+  describe('addMs()', () => {
+    it('should increase elapsed time by specified amount on stopped timer', () => {
+      const timer = new Timer('Test');
+      timer.addMs(5000);
+      expect(timer.getElapsedMs()).to.equal(5000);
+    });
+
+    it('should increase elapsed time by specified amount on paused timer', (done) => {
+      const timer = new Timer('Test');
+      timer.start();
+      setTimeout(() => {
+        timer.pause();
+        const beforeAdd = timer.getElapsedMs();
+        timer.addMs(5000);
+        expect(timer.getElapsedMs()).to.equal(beforeAdd + 5000);
+        done();
+      }, 100);
+    });
+
+    it('should increase accumulated time on running timer without affecting running session', (done) => {
+      const timer = new Timer('Test');
+      timer.start();
+      setTimeout(() => {
+        const beforeAdd = timer.getElapsedMs();
+        timer.addMs(5000);
+        const afterAdd = timer.getElapsedMs();
+        expect(afterAdd).to.be.at.least(beforeAdd + 5000);
+        expect(timer.state).to.equal('running');
+        done();
+      }, 100);
+    });
+
+    it('should be no-op when adding zero milliseconds', () => {
+      const timer = new Timer('Test');
+      timer.elapsedMs = 1000;
+      timer.addMs(0);
+      expect(timer.getElapsedMs()).to.equal(1000);
+    });
+
+    it('should throw RangeError when adding negative milliseconds', () => {
+      const timer = new Timer('Test');
+      expect(() => timer.addMs(-100)).to.throw(RangeError, 'Amount must be non-negative');
+    });
+
+    it('should throw RangeError for negative amount even on running timer', (done) => {
+      const timer = new Timer('Test');
+      timer.start();
+      setTimeout(() => {
+        expect(() => timer.addMs(-50)).to.throw(RangeError, 'Amount must be non-negative');
+        done();
+      }, 50);
+    });
+  });
 });
