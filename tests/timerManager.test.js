@@ -408,4 +408,118 @@ describe('TimerManager', () => {
       expect(timers[0].title).to.equal('Timer 1');
     });
   });
+
+  describe('distributeTime()', () => {
+    it('should accept a Map of timer ID to milliseconds', () => {
+      const manager = new TimerManager(3);
+      const timers = manager.getAllTimers();
+
+      const allocations = new Map([
+        [timers[0].id, 5000],
+        [timers[1].id, 3000]
+      ]);
+
+      const result = manager.distributeTime(allocations);
+      expect(result).to.be.true;
+    });
+
+    it('should apply allocations to correct timers', () => {
+      const manager = new TimerManager(3);
+      const timers = manager.getAllTimers();
+
+      const timer0InitialTime = timers[0].getElapsedMs();
+      const timer1InitialTime = timers[1].getElapsedMs();
+      const timer2InitialTime = timers[2].getElapsedMs();
+
+      const allocations = new Map([
+        [timers[0].id, 5000],
+        [timers[1].id, 3000]
+      ]);
+
+      manager.distributeTime(allocations);
+
+      expect(timers[0].getElapsedMs()).to.equal(timer0InitialTime + 5000);
+      expect(timers[1].getElapsedMs()).to.equal(timer1InitialTime + 3000);
+      expect(timers[2].getElapsedMs()).to.equal(timer2InitialTime);
+    });
+
+    it('should skip missing timer IDs gracefully and log warning', () => {
+      const manager = new TimerManager(2);
+      const timers = manager.getAllTimers();
+
+      const originalWarn = console.warn;
+      const warnings = [];
+      console.warn = (msg) => warnings.push(msg);
+
+      const allocations = new Map([
+        [timers[0].id, 5000],
+        ['non-existent-id', 3000],
+        [timers[1].id, 2000]
+      ]);
+
+      const result = manager.distributeTime(allocations);
+
+      console.warn = originalWarn;
+
+      expect(result).to.be.true;
+      expect(timers[0].getElapsedMs()).to.equal(5000);
+      expect(timers[1].getElapsedMs()).to.equal(2000);
+      expect(warnings).to.have.lengthOf(1);
+      expect(warnings[0]).to.include('non-existent-id');
+    });
+
+    it('should persist state after distributing time', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timers = manager.getAllTimers();
+
+      const allocations = new Map([
+        [timers[0].id, 5000],
+        [timers[1].id, 3000]
+      ]);
+
+      manager.distributeTime(allocations);
+
+      const loaded = storage.load();
+      expect(loaded.timers[0].elapsedMs).to.equal(5000);
+      expect(loaded.timers[1].elapsedMs).to.equal(3000);
+    });
+
+    it('should return true if at least one allocation succeeded', () => {
+      const manager = new TimerManager(2);
+      const timers = manager.getAllTimers();
+
+      const allocations = new Map([
+        [timers[0].id, 5000],
+        ['non-existent-id', 3000]
+      ]);
+
+      const originalWarn = console.warn;
+      console.warn = () => {};
+
+      const result = manager.distributeTime(allocations);
+
+      console.warn = originalWarn;
+
+      expect(result).to.be.true;
+    });
+
+    it('should return false if all allocations failed', () => {
+      const manager = new TimerManager(2);
+
+      const allocations = new Map([
+        ['non-existent-id-1', 5000],
+        ['non-existent-id-2', 3000]
+      ]);
+
+      const originalWarn = console.warn;
+      console.warn = () => {};
+
+      const result = manager.distributeTime(allocations);
+
+      console.warn = originalWarn;
+
+      expect(result).to.be.false;
+    });
+  });
 });

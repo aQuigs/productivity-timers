@@ -13,6 +13,105 @@ describe('StorageService', () => {
     localStorage.clear();
   });
 
+  describe('Schema Extension - Idle State Fields', () => {
+    it('should save and load hiddenAt field', () => {
+      const state = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null,
+        hiddenAt: Date.now()
+      };
+
+      expect(storage.save(state)).to.be.true;
+      const loaded = storage.load();
+      expect(loaded.hiddenAt).to.equal(state.hiddenAt);
+    });
+
+    it('should save and load hiddenAt as null', () => {
+      const state = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null,
+        hiddenAt: null
+      };
+
+      expect(storage.save(state)).to.be.true;
+      const loaded = storage.load();
+      expect(loaded.hiddenAt).to.be.null;
+    });
+
+    it('should save and load runningTimerIdBeforeHide field', () => {
+      const state = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null,
+        hiddenAt: Date.now(),
+        runningTimerIdBeforeHide: 'abc'
+      };
+
+      expect(storage.save(state)).to.be.true;
+      const loaded = storage.load();
+      expect(loaded.runningTimerIdBeforeHide).to.equal('abc');
+    });
+
+    it('should save and load runningTimerIdBeforeHide as null', () => {
+      const state = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null,
+        hiddenAt: null,
+        runningTimerIdBeforeHide: null
+      };
+
+      expect(storage.save(state)).to.be.true;
+      const loaded = storage.load();
+      expect(loaded.runningTimerIdBeforeHide).to.be.null;
+    });
+
+    it('should reject invalid hiddenAt type', () => {
+      const state = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null,
+        hiddenAt: 'invalid-string'
+      };
+
+      expect(storage.save(state)).to.be.false;
+    });
+
+    it('should reject invalid runningTimerIdBeforeHide type', () => {
+      const state = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null,
+        hiddenAt: null,
+        runningTimerIdBeforeHide: 123
+      };
+
+      expect(storage.save(state)).to.be.false;
+    });
+
+    it('should load old schema without new fields', () => {
+      const oldState = {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
+        ],
+        runningTimerId: null
+      };
+
+      expect(storage.save(oldState)).to.be.true;
+      const loaded = storage.load();
+      expect(loaded.hiddenAt).to.be.undefined;
+      expect(loaded.runningTimerIdBeforeHide).to.be.undefined;
+    });
+  });
+
   describe('Constructor', () => {
     it('should create a StorageService with default storage key', () => {
       expect(storage).to.be.instanceOf(StorageService);

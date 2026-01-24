@@ -151,6 +151,25 @@ export class StorageService {
       }
     }
 
+    // Validate hiddenAt (must be null or number)
+    if (state.hiddenAt !== undefined && state.hiddenAt !== null && typeof state.hiddenAt !== 'number') {
+      return false;
+    }
+
+    // Validate runningTimerIdBeforeHide (must be null or string)
+    if (state.runningTimerIdBeforeHide !== undefined &&
+        state.runningTimerIdBeforeHide !== null &&
+        typeof state.runningTimerIdBeforeHide !== 'string') {
+      return false;
+    }
+
+    // Validate accumulatedIdleMs (must be null, undefined, or number >= 0)
+    if (state.accumulatedIdleMs !== undefined &&
+        state.accumulatedIdleMs !== null &&
+        (typeof state.accumulatedIdleMs !== 'number' || state.accumulatedIdleMs < 0)) {
+      return false;
+    }
+
     return true;
   }
 
