@@ -198,6 +198,16 @@ export class AllocationModal {
       const label = document.createElement('label');
       label.textContent = timer.title;
 
+      const decBtn = document.createElement('button');
+      decBtn.type = 'button';
+      decBtn.className = 'btn-percent-dec';
+      decBtn.textContent = '- 10%';
+      decBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        input.value = String(Math.max(0, Number(input.value) - 10));
+        input.dispatchEvent(new Event('input'));
+      });
+
       const input = document.createElement('input');
       input.type = 'number';
       input.className = 'percentage-input';
@@ -208,9 +218,21 @@ export class AllocationModal {
 
       input.addEventListener('input', () => this.#updatePercentageValidation());
 
+      const incBtn = document.createElement('button');
+      incBtn.type = 'button';
+      incBtn.className = 'btn-percent-inc';
+      incBtn.textContent = '+ 10%';
+      incBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        input.value = String(Math.min(100, Number(input.value) + 10));
+        input.dispatchEvent(new Event('input'));
+      });
+
       row.appendChild(label);
+      row.appendChild(decBtn);
       row.appendChild(input);
       row.appendChild(document.createElement('span')).textContent = '%';
+      row.appendChild(incBtn);
 
       form.appendChild(row);
     });

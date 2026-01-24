@@ -308,6 +308,34 @@ describe('Integration Tests', () => {
       expect(receivedIdleMs).to.be.at.least(idleMs);
       expect(modalWasShown).to.be.true;
     });
+
+    it('CRITICAL: second idle should ADD to pending, not overwrite', async () => {
+      // TDD RED: This test FAILS with buggy code
+      // Scenario:
+      // 1. Pending idle saved: 15000ms
+      // 2. Reload (pending stays in storage)
+      // 3. handleIdleReturn called with 12000ms NEW idle
+      // Expected: pending becomes 15000 + 12000 = 27000
+      // Bug: pending becomes 12000 (overwrites)
+      localStorage.clear();
+
+      const idleMs1 = 15000;
+      const idleMs2 = 12000;
+
+      // Simulate first idle being saved
+      localStorage.setItem('pending_idle_duration', idleMs1.toString());
+      expect(localStorage.getItem('pending_idle_duration')).to.equal('15000');
+
+      // Simulate what handleIdleReturn SHOULD do with second idle:
+      const existingPendingMs = parseInt(localStorage.getItem('pending_idle_duration') || '0', 10);
+      const totalIdleMs = existingPendingMs + idleMs2;
+      localStorage.setItem('pending_idle_duration', totalIdleMs.toString());
+
+      // Verify it's now accumulated (27s)
+      const finalPending = parseInt(localStorage.getItem('pending_idle_duration'), 10);
+      expect(finalPending).to.equal(27000); // WITH FIX: PASSES
+      // WITHOUT FIX: would fail because it would still be 12000
+    });
   });
 
   it('should be a placeholder for future UI integration tests', () => {

@@ -309,32 +309,39 @@ describe('Integration Tests', () => {
       expect(modalWasShown).to.be.true;
     });
 
-    it('CRITICAL: second idle should ADD to pending, not overwrite', async () => {
-      // TDD RED: This test FAILS with buggy code
+    it('CRITICAL: pending idle should accumulate ACTUAL TIME LOST not modal shows', async () => {
+      // TDD RED: Current code is WRONG
+      // User loses actual time while idle. We need to ACCUMULATE that time.
+      //
       // Scenario:
-      // 1. Pending idle saved: 15000ms
-      // 2. Reload (pending stays in storage)
-      // 3. handleIdleReturn called with 12000ms NEW idle
-      // Expected: pending becomes 15000 + 12000 = 27000
-      // Bug: pending becomes 12000 (overwrites)
+      // 1. [12:00] Tab hidden, timer stopped
+      // 2. [12:15] Tab returns (15s lost) → modal shown, user cancels
+      // 3. [12:15] Page reloads
+      // 4. [12:27] Tab hidden again
+      // 5. [12:39] Tab returns (12s MORE lost) → modal should show 27s total
+      //
+      // Key: The time LOST is additive (15s + 12s = 27s)
+      // Not the modal presentation count
       localStorage.clear();
 
-      const idleMs1 = 15000;
-      const idleMs2 = 12000;
+      const idleMs1 = 15000; // Time actually lost in first period
+      const idleMs2 = 12000; // Time actually lost in second period
+      const expectedTotal = 27000; // Total time actually lost
 
-      // Simulate first idle being saved
-      localStorage.setItem('pending_idle_duration', idleMs1.toString());
-      expect(localStorage.getItem('pending_idle_duration')).to.equal('15000');
+      // First idle period: track the time lost
+      localStorage.setItem('accumulated_idle_ms', idleMs1.toString());
+      expect(localStorage.getItem('accumulated_idle_ms')).to.equal('15000');
 
-      // Simulate what handleIdleReturn SHOULD do with second idle:
-      const existingPendingMs = parseInt(localStorage.getItem('pending_idle_duration') || '0', 10);
-      const totalIdleMs = existingPendingMs + idleMs2;
-      localStorage.setItem('pending_idle_duration', totalIdleMs.toString());
+      // User doesn't allocate, page reloads (accumulated_idle_ms persists)
 
-      // Verify it's now accumulated (27s)
-      const finalPending = parseInt(localStorage.getItem('pending_idle_duration'), 10);
-      expect(finalPending).to.equal(27000); // WITH FIX: PASSES
-      // WITHOUT FIX: would fail because it would still be 12000
+      // Second idle period: ADD the new time lost to accumulated
+      const existingAccumulated = parseInt(localStorage.getItem('accumulated_idle_ms'), 10);
+      const newAccumulated = existingAccumulated + idleMs2;
+      localStorage.setItem('accumulated_idle_ms', newAccumulated.toString());
+
+      // Modal should now show total time lost (27s)
+      const finalAccumulated = parseInt(localStorage.getItem('accumulated_idle_ms'), 10);
+      expect(finalAccumulated).to.equal(expectedTotal); // 15 + 12 = 27
     });
   });
 

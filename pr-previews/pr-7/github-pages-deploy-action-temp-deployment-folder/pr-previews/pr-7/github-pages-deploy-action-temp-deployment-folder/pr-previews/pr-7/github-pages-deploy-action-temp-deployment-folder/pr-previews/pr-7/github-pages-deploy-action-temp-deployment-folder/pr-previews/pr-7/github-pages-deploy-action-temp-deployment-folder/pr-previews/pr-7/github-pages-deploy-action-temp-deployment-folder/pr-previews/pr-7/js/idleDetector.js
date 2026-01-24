@@ -9,6 +9,7 @@ class IdleDetector {
 
   init() {
     document.addEventListener('visibilitychange', this.onVisibilityChange.bind(this));
+    console.log('IdleDetector: visibilitychange listener attached');
   }
 
   onVisibilityChange() {
