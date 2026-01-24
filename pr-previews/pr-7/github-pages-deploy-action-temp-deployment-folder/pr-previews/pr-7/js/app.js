@@ -37,6 +37,20 @@ class App {
     this.renderAllTimers();
     this.bindGlobalEvents();
     this.startUpdateLoop();
+    this.checkPendingIdle();
+  }
+
+  /**
+   * Check if there's pending idle duration from before page reload
+   */
+  checkPendingIdle() {
+    const pendingIdleMs = localStorage.getItem('pending_idle_duration');
+    const pendingPreviousTimer = localStorage.getItem('pending_idle_previous_timer');
+
+    if (pendingIdleMs) {
+      const idleMs = parseInt(pendingIdleMs, 10);
+      this.handleIdleReturn(idleMs, pendingPreviousTimer);
+    }
   }
 
   /**
@@ -319,15 +333,26 @@ class App {
    * Handle return from idle period
    * Shows modal for time allocation if idle duration exceeds threshold
    * @param {number} idleMs - Idle duration in milliseconds
+   * @param {string|null} overridePreviousTimerId - Optional override from pending idle restore
    */
-  async handleIdleReturn(idleMs) {
+  async handleIdleReturn(idleMs, overridePreviousTimerId = null) {
     const timers = this.timerManager.getAllTimers();
-    const previousRunningId = this.hiddenRunningTimers.size > 0
+    const previousRunningId = overridePreviousTimerId || (this.hiddenRunningTimers.size > 0
       ? Array.from(this.hiddenRunningTimers)[0]
-      : null;
+      : null);
 
-    // Show allocation modal
-    const modal = new AllocationModal(idleMs, timers, previousRunningId);
+    // ADD to existing pending idle (accumulate across multiple idle periods)
+    const existingPendingMs = parseInt(localStorage.getItem('pending_idle_duration') || '0', 10);
+    const totalIdleMs = existingPendingMs + idleMs;
+
+    // Persist accumulated idle duration in case user doesn't fill out modal and reloads
+    localStorage.setItem('pending_idle_duration', totalIdleMs.toString());
+    if (previousRunningId) {
+      localStorage.setItem('pending_idle_previous_timer', previousRunningId);
+    }
+
+    // Show allocation modal with accumulated idle time
+    const modal = new AllocationModal(totalIdleMs, timers, previousRunningId);
     const result = await modal.show();
 
     // Apply allocation based on strategy
@@ -382,6 +407,9 @@ class App {
     // Clear tracking and update displays
     this.hiddenRunningTimers.clear();
     localStorage.removeItem('app_hidden_running_timers');
+    // Clear pending idle now that modal was handled
+    localStorage.removeItem('pending_idle_duration');
+    localStorage.removeItem('pending_idle_previous_timer');
     this.updateAllTimerDisplays();
   }
 }

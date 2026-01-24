@@ -16,7 +16,13 @@ class App {
     this.timerElements = new Map();
     this.lastDisplayedValues = new Map();
     this.rafId = null;
-    this.hiddenRunningTimers = new Set();
+
+    // Restore hiddenRunningTimers from localStorage (survives page reload)
+    const savedHiddenTimers = localStorage.getItem('app_hidden_running_timers');
+    this.hiddenRunningTimers = savedHiddenTimers
+      ? new Set(JSON.parse(savedHiddenTimers))
+      : new Set();
+
     this.idleDetector = new IdleDetector({
       callback: (idleMs) => this.handleIdleReturn(idleMs),
       resumeCallback: () => this.handleResume(),
@@ -28,13 +34,9 @@ class App {
    * Initialize the application
    */
   init() {
-    console.log('App initializing...');
-    console.log('Timer container:', this.timerContainer);
-    console.log('Initial timers:', this.timerManager.getAllTimers().length);
     this.renderAllTimers();
     this.bindGlobalEvents();
     this.startUpdateLoop();
-    console.log('App initialized!');
   }
 
   /**
@@ -118,7 +120,6 @@ class App {
     this.resetAllBtn.addEventListener('click', () => this.handleResetAll());
     this.addTimerBtn.addEventListener('click', () => this.handleAddTimer());
     document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
-    console.log('App: visibilitychange listener attached');
   }
 
   /**
@@ -282,19 +283,19 @@ class App {
    * IdleDetector handles resume logic based on idle duration
    */
   handleVisibilityChange() {
-    console.log('App.handleVisibilityChange called, hidden:', document.hidden);
     if (document.hidden) {
       const timers = this.timerManager.getAllTimers();
       this.hiddenRunningTimers.clear();
 
       timers.forEach(timer => {
         if (timer.isRunning()) {
-          console.log('Pausing running timer:', timer.id);
           this.hiddenRunningTimers.add(timer.id);
           this.timerManager.pauseTimer(timer.id);
         }
       });
-      console.log('hiddenRunningTimers:', Array.from(this.hiddenRunningTimers));
+
+      // CRITICAL: Save to localStorage (survives page reload/navigation)
+      localStorage.setItem('app_hidden_running_timers', JSON.stringify(Array.from(this.hiddenRunningTimers)));
     }
     // Don't handle visible case - IdleDetector calls handleResume() or handleIdleReturn()
   }
@@ -304,13 +305,13 @@ class App {
    * Called by IdleDetector when idle duration is below threshold
    */
   handleResume() {
-    console.log('App.handleResume called, hiddenRunningTimers:', Array.from(this.hiddenRunningTimers));
     // Auto-resume previously running timers
     this.hiddenRunningTimers.forEach(timerId => {
-      console.log('Resuming timer:', timerId);
       this.timerManager.startTimer(timerId);
     });
     this.hiddenRunningTimers.clear();
+    // Clear from localStorage
+    localStorage.removeItem('app_hidden_running_timers');
     this.updateAllTimerDisplays();
   }
 
@@ -320,17 +321,14 @@ class App {
    * @param {number} idleMs - Idle duration in milliseconds
    */
   async handleIdleReturn(idleMs) {
-    console.log('App.handleIdleReturn called, idleMs:', idleMs, 'hiddenRunningTimers:', Array.from(this.hiddenRunningTimers));
     const timers = this.timerManager.getAllTimers();
     const previousRunningId = this.hiddenRunningTimers.size > 0
       ? Array.from(this.hiddenRunningTimers)[0]
       : null;
 
-    console.log('Showing modal, previousRunningId:', previousRunningId);
     // Show allocation modal
     const modal = new AllocationModal(idleMs, timers, previousRunningId);
     const result = await modal.show();
-    console.log('Modal result:', result);
 
     // Apply allocation based on strategy
     let allocations = new Map();
@@ -375,14 +373,13 @@ class App {
 
     // Clear tracking and update displays
     this.hiddenRunningTimers.clear();
+    localStorage.removeItem('app_hidden_running_timers');
     this.updateAllTimerDisplays();
   }
 }
 
 // Initialize app when DOM is ready
-console.log('app.js loaded');
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM ready, creating App...');
   const app = new App();
   app.init();
 });

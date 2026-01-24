@@ -206,13 +206,19 @@ describe('IdleDetector', () => {
       }
     });
 
-    it('should NOT clear hiddenTimestamp if callback was not emitted', () => {
+    it('should clear hiddenTimestamp even if callback was not emitted (idle <= threshold)', () => {
       const callback = () => {};
       detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
       const now = 100000;
-      const hiddenTime = now - 5000;
+      const hiddenTime = now - 5000; // Only 5s idle, below threshold
       localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      // Mock visibilityState to 'visible' for the test
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get() { return 'visible'; }
+      });
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
@@ -221,7 +227,8 @@ describe('IdleDetector', () => {
       try {
         detector.onVisibilityChange();
         const timestamp = localStorage.getItem('idle_detector_hidden_at');
-        expect(timestamp).to.not.be.null;
+        // SHOULD be null - we always clear to prevent re-triggers
+        expect(timestamp).to.be.null;
       } finally {
         Date.now = originalDateNow;
       }
