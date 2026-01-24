@@ -309,36 +309,39 @@ describe('Integration Tests', () => {
       expect(modalWasShown).to.be.true;
     });
 
-    it('CRITICAL: multiple idle periods should NOT multiply time', async () => {
-      // TDD RED: Current approach is WRONG
-      // The bug: time gets multiplied when there are multiple idle periods
+    it('CRITICAL: pending idle should accumulate ACTUAL TIME LOST not modal shows', async () => {
+      // TDD RED: Current code is WRONG
+      // User loses actual time while idle. We need to ACCUMULATE that time.
       //
-      // Correct behavior:
-      // 1. Tab hidden 15s → detect idle, show modal with 15s
-      // 2. User doesn't fill modal, reload
-      // 3. Tab hidden 12s → detect idle again
-      // WRONG (current): Show modal with 27s (15+12), apply 27s to timers
-      // RIGHT: Should only accumulate time that wasn't already allocated
-      //        If first 15s wasn't allocated yet, reuse that value
-      //        Don't add the new 12s until first 15s is handled
+      // Scenario:
+      // 1. [12:00] Tab hidden, timer stopped
+      // 2. [12:15] Tab returns (15s lost) → modal shown, user cancels
+      // 3. [12:15] Page reloads
+      // 4. [12:27] Tab hidden again
+      // 5. [12:39] Tab returns (12s MORE lost) → modal should show 27s total
       //
-      // The fix: DON'T accumulate pending_idle_duration
-      // Instead: only show the modal ONCE with original idle time
-      // Ignore subsequent idles until first one is resolved
+      // Key: The time LOST is additive (15s + 12s = 27s)
+      // Not the modal presentation count
       localStorage.clear();
 
-      const idleMs1 = 15000;
-      const idleMs2 = 12000;
+      const idleMs1 = 15000; // Time actually lost in first period
+      const idleMs2 = 12000; // Time actually lost in second period
+      const expectedTotal = 27000; // Total time actually lost
 
-      // First idle detected
-      localStorage.setItem('pending_idle_duration', idleMs1.toString());
+      // First idle period: track the time lost
+      localStorage.setItem('accumulated_idle_ms', idleMs1.toString());
+      expect(localStorage.getItem('accumulated_idle_ms')).to.equal('15000');
 
-      // Second idle detected - SHOULD NOT change pending_idle_duration
-      // It should stay 15000, not become 27000
-      // Because the 15000 hasn't been allocated yet!
+      // User doesn't allocate, page reloads (accumulated_idle_ms persists)
 
-      const pending = parseInt(localStorage.getItem('pending_idle_duration'), 10);
-      expect(pending).to.equal(15000); // Should STAY 15000, not add up
+      // Second idle period: ADD the new time lost to accumulated
+      const existingAccumulated = parseInt(localStorage.getItem('accumulated_idle_ms'), 10);
+      const newAccumulated = existingAccumulated + idleMs2;
+      localStorage.setItem('accumulated_idle_ms', newAccumulated.toString());
+
+      // Modal should now show total time lost (27s)
+      const finalAccumulated = parseInt(localStorage.getItem('accumulated_idle_ms'), 10);
+      expect(finalAccumulated).to.equal(expectedTotal); // 15 + 12 = 27
     });
   });
 

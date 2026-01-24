@@ -26,7 +26,8 @@ class App {
     this.idleDetector = new IdleDetector({
       callback: (idleMs) => this.handleIdleReturn(idleMs),
       resumeCallback: () => this.handleResume(),
-      idleThreshold: 10000
+      idleThreshold: 10000,
+      onSleepDetected: (sleepMs) => this.handleSleepDetected(sleepMs)
     });
   }
 
@@ -41,15 +42,17 @@ class App {
   }
 
   /**
-   * Check if there's pending idle duration from before page reload
+   * Check if there's accumulated idle duration from before page reload
    */
   checkPendingIdle() {
-    const pendingIdleMs = localStorage.getItem('pending_idle_duration');
+    const accumulatedIdleMs = localStorage.getItem('accumulated_idle_ms');
     const pendingPreviousTimer = localStorage.getItem('pending_idle_previous_timer');
 
-    if (pendingIdleMs) {
-      const idleMs = parseInt(pendingIdleMs, 10);
-      this.handleIdleReturn(idleMs, pendingPreviousTimer);
+    if (accumulatedIdleMs) {
+      const idleMs = parseInt(accumulatedIdleMs, 10);
+      if (idleMs > 10000) {
+        this.handleIdleReturn(idleMs, pendingPreviousTimer);
+      }
     }
   }
 
@@ -330,9 +333,41 @@ class App {
   }
 
   /**
+   * Handle computer sleep/wake detection
+   * Pauses running timers and corrects for incorrectly accumulated sleep time
+   * @param {number} sleepMs - Sleep duration in milliseconds
+   */
+  handleSleepDetected(sleepMs) {
+    const timers = this.timerManager.getAllTimers();
+    let runningTimerId = null;
+
+    timers.forEach(timer => {
+      if (timer.isRunning()) {
+        runningTimerId = timer.id;
+        // Timer incorrectly accumulated sleepMs during sleep
+        // Pause it and subtract the sleep time
+        this.timerManager.pauseTimer(timer.id);
+
+        // Subtract the incorrectly accumulated sleep time
+        const currentElapsed = timer.getElapsedMs();
+        const correctedElapsed = Math.max(0, currentElapsed - sleepMs);
+        timer.elapsedMs = correctedElapsed;
+      }
+    });
+
+    if (runningTimerId) {
+      this.hiddenRunningTimers.add(runningTimerId);
+      localStorage.setItem('app_hidden_running_timers', JSON.stringify(Array.from(this.hiddenRunningTimers)));
+      localStorage.setItem('pending_idle_previous_timer', runningTimerId);
+    }
+
+    this.updateAllTimerDisplays();
+  }
+
+  /**
    * Handle return from idle period
    * Shows modal for time allocation if idle duration exceeds threshold
-   * @param {number} idleMs - Idle duration in milliseconds
+   * @param {number} idleMs - Idle duration in milliseconds (accumulated)
    * @param {string|null} overridePreviousTimerId - Optional override from pending idle restore
    */
   async handleIdleReturn(idleMs, overridePreviousTimerId = null) {
@@ -341,20 +376,12 @@ class App {
       ? Array.from(this.hiddenRunningTimers)[0]
       : null);
 
-    // Check if there's already a pending idle - if so, use that instead of accumulating
-    const existingPendingMs = parseInt(localStorage.getItem('pending_idle_duration') || '0', 10);
-    const idleToUse = existingPendingMs > 0 ? existingPendingMs : idleMs;
-
-    // Only save pending if not already saved
-    if (existingPendingMs === 0) {
-      localStorage.setItem('pending_idle_duration', idleMs.toString());
-    }
     if (previousRunningId) {
       localStorage.setItem('pending_idle_previous_timer', previousRunningId);
     }
 
-    // Show allocation modal with the pending idle time (don't accumulate)
-    const modal = new AllocationModal(idleToUse, timers, previousRunningId);
+    // Show allocation modal with accumulated idle time
+    const modal = new AllocationModal(idleMs, timers, previousRunningId);
     const result = await modal.show();
 
     // Apply allocation based on strategy
@@ -409,8 +436,8 @@ class App {
     // Clear tracking and update displays
     this.hiddenRunningTimers.clear();
     localStorage.removeItem('app_hidden_running_timers');
-    // Clear pending idle now that modal was handled
-    localStorage.removeItem('pending_idle_duration');
+    // Clear accumulated idle now that modal was handled
+    localStorage.removeItem('accumulated_idle_ms');
     localStorage.removeItem('pending_idle_previous_timer');
     this.updateAllTimerDisplays();
   }
