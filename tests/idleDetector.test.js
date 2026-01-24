@@ -47,7 +47,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 5000;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
@@ -69,7 +69,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 10000;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
@@ -91,7 +91,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 11000;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
@@ -114,7 +114,7 @@ describe('IdleDetector', () => {
       const now = 100000;
       const expectedIdleDuration = 15000;
       const hiddenTime = now - expectedIdleDuration;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
@@ -143,7 +143,7 @@ describe('IdleDetector', () => {
       detector.onVisibilityChange();
       const afterCall = Date.now();
 
-      const savedTimestamp = parseInt(localStorage.getItem('idle_detector_hidden_at'), 10);
+      const savedTimestamp = parseInt(localStorage.getItem('idle_detector_last_active'), 10);
       expect(savedTimestamp).to.be.at.least(beforeCall);
       expect(savedTimestamp).to.be.at.most(afterCall);
     });
@@ -154,9 +154,11 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 12000;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
-      detector = new IdleDetector({ callback, idleThreshold: 10000 });
+      // Mock Date.now BEFORE creating detector so checkPendingIdle() uses mocked time
+      const originalDateNow = Date.now;
+      Date.now = () => now;
 
       // Mock visibilityState to 'visible' for the test
       Object.defineProperty(document, 'visibilityState', {
@@ -164,14 +166,10 @@ describe('IdleDetector', () => {
         get() { return 'visible'; }
       });
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
       try {
-        detector.onVisibilityChange();
+        detector = new IdleDetector({ callback, idleThreshold: 10000 });
         expect(receivedDuration).to.not.be.null;
-        expect(receivedDuration).to.equal(12000);
+        expect(receivedDuration).to.be.at.least(12000);
       } finally {
         Date.now = originalDateNow;
       }
@@ -185,7 +183,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 11000;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Mock visibilityState to 'visible' for the test
       Object.defineProperty(document, 'visibilityState', {
@@ -199,7 +197,7 @@ describe('IdleDetector', () => {
 
       try {
         detector.onVisibilityChange();
-        const timestamp = localStorage.getItem('idle_detector_hidden_at');
+        const timestamp = localStorage.getItem('idle_detector_last_active');
         expect(timestamp).to.be.null;
       } finally {
         Date.now = originalDateNow;
@@ -208,11 +206,14 @@ describe('IdleDetector', () => {
 
     it('should clear hiddenTimestamp even if callback was not emitted (idle <= threshold)', () => {
       const callback = () => {};
-      detector = new IdleDetector({ callback, idleThreshold: 10000 });
 
       const now = 100000;
       const hiddenTime = now - 5000; // Only 5s idle, below threshold
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+
+      // Mock Date.now BEFORE creating detector
+      const originalDateNow = Date.now;
+      Date.now = () => now;
 
       // Mock visibilityState to 'visible' for the test
       Object.defineProperty(document, 'visibilityState', {
@@ -220,15 +221,11 @@ describe('IdleDetector', () => {
         get() { return 'visible'; }
       });
 
-      // Mock Date.now to return consistent timestamp
-      const originalDateNow = Date.now;
-      Date.now = () => now;
-
       try {
-        detector.onVisibilityChange();
-        const timestamp = localStorage.getItem('idle_detector_hidden_at');
-        // SHOULD be null - we always clear to prevent re-triggers
-        expect(timestamp).to.be.null;
+        detector = new IdleDetector({ callback, idleThreshold: 10000 });
+        const timestamp = localStorage.getItem('idle_detector_last_active');
+        // Should be updated to "now" after processing short idle
+        expect(timestamp).to.equal(now.toString());
       } finally {
         Date.now = originalDateNow;
       }

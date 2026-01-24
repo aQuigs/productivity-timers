@@ -43,7 +43,7 @@ describe('Integration Tests', () => {
 
       // Simulate: tab hidden -> wait -> tab visible
       const hiddenTime = Date.now() - 12000; // 12s ago
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Mock visibilityState
       Object.defineProperty(document, 'visibilityState', {
@@ -101,7 +101,7 @@ describe('Integration Tests', () => {
       // Simulate 15 seconds idle
       const idleMs = 15000;
       const hiddenTime = Date.now() - idleMs;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Simulate modal interaction: user selects "previous-timer"
       const timers = timerManager.getAllTimers();
@@ -148,7 +148,7 @@ describe('Integration Tests', () => {
 
       // Simulate tab hidden with timestamp
       const hiddenTime = Date.now();
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Create new TimerManager (simulates page reload)
       const newTimerManager = new TimerManager();
@@ -162,7 +162,7 @@ describe('Integration Tests', () => {
       // This test verifies idle timestamp persistence, not timer state
 
       // Verify idle timestamp persisted
-      const storedHiddenAt = localStorage.getItem('idle_detector_hidden_at');
+      const storedHiddenAt = localStorage.getItem('idle_detector_last_active');
       expect(storedHiddenAt).to.equal(hiddenTime.toString());
     });
 
@@ -226,13 +226,13 @@ describe('Integration Tests', () => {
 
       // IdleDetector saves timestamp
       const hiddenTime = Date.now() - 5000; // Only 5s idle (< 10s threshold)
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Simulate: user returns (App.handleVisibilityChange called when visible)
       // The app should check idle duration and auto-resume without modal
 
       // Mock what App.js does in handleVisibilityChange
-      const hiddenAtStr = localStorage.getItem('idle_detector_hidden_at');
+      const hiddenAtStr = localStorage.getItem('idle_detector_last_active');
       const hiddenAt = parseInt(hiddenAtStr, 10);
       const idleDuration = Date.now() - hiddenAt;
 
@@ -265,7 +265,7 @@ describe('Integration Tests', () => {
       // Simulate 15s idle (> 10s threshold)
       const idleMs = 15000;
       const hiddenTime = Date.now() - idleMs;
-      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
 
       // Create IdleDetector (this is what App.js does)
       let modalWasShown = false;
