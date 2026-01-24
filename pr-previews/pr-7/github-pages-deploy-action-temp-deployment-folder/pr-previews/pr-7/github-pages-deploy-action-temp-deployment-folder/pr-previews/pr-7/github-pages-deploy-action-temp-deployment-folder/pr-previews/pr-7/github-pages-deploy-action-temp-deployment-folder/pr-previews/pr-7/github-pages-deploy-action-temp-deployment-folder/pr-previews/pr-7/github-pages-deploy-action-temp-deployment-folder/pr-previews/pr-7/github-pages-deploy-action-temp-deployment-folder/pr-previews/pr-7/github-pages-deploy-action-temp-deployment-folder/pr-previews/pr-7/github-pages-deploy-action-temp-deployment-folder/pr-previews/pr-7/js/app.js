@@ -19,6 +19,7 @@ class App {
     this.hiddenRunningTimers = new Set();
     this.idleDetector = new IdleDetector({
       callback: (idleMs) => this.handleIdleReturn(idleMs),
+      resumeCallback: () => this.handleResume(),
       idleThreshold: 10000
     });
   }
@@ -276,7 +277,8 @@ class App {
 
   /**
    * Handle page visibility changes
-   * Pauses running timers when page becomes hidden and resumes them when visible
+   * Pauses running timers when page becomes hidden
+   * IdleDetector handles resume logic based on idle duration
    */
   handleVisibilityChange() {
     if (document.hidden) {
@@ -289,32 +291,21 @@ class App {
           this.timerManager.pauseTimer(timer.id);
         }
       });
-    } else {
-      // Check if idle duration is below threshold - if so, auto-resume
-      // If above threshold, IdleDetector will call handleIdleReturn
-      const hiddenAtStr = localStorage.getItem('idle_detector_hidden_at');
-      if (hiddenAtStr) {
-        const hiddenAt = parseInt(hiddenAtStr, 10);
-        const idleDuration = Date.now() - hiddenAt;
-
-        // If idle <= threshold, auto-resume (IdleDetector won't trigger)
-        if (idleDuration <= 10000) {
-          this.hiddenRunningTimers.forEach(timerId => {
-            this.timerManager.startTimer(timerId);
-          });
-          this.hiddenRunningTimers.clear();
-        }
-        // If idle > threshold, IdleDetector will handle via handleIdleReturn callback
-      } else {
-        // No idle tracking, just resume
-        this.hiddenRunningTimers.forEach(timerId => {
-          this.timerManager.startTimer(timerId);
-        });
-        this.hiddenRunningTimers.clear();
-      }
-
-      this.updateAllTimerDisplays();
     }
+    // Don't handle visible case - IdleDetector calls handleResume() or handleIdleReturn()
+  }
+
+  /**
+   * Handle resume after short idle (<= threshold)
+   * Called by IdleDetector when idle duration is below threshold
+   */
+  handleResume() {
+    // Auto-resume previously running timers
+    this.hiddenRunningTimers.forEach(timerId => {
+      this.timerManager.startTimer(timerId);
+    });
+    this.hiddenRunningTimers.clear();
+    this.updateAllTimerDisplays();
   }
 
   /**

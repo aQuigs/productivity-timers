@@ -163,6 +163,13 @@ export class StorageService {
       return false;
     }
 
+    // Validate accumulatedIdleMs (must be null, undefined, or number >= 0)
+    if (state.accumulatedIdleMs !== undefined &&
+        state.accumulatedIdleMs !== null &&
+        (typeof state.accumulatedIdleMs !== 'number' || state.accumulatedIdleMs < 0)) {
+      return false;
+    }
+
     return true;
   }
 

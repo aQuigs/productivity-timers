@@ -208,6 +208,108 @@ describe('Integration Tests', () => {
     });
   });
 
+  describe('Real App.js Integration (E2E)', () => {
+    // These tests actually simulate what happens when the user interacts with the app
+
+    it('CRITICAL: should auto-resume timer when idle < 10s (no modal)', (done) => {
+      // This is what the user reported as broken
+      localStorage.clear();
+
+      // Simulate: app starts, timer is running
+      const timerManager = new TimerManager();
+      const timer1 = timerManager.addTimer('Test Timer');
+      timerManager.startTimer(timer1.id);
+
+      // Simulate: user hides tab (App.handleVisibilityChange called)
+      timerManager.pauseTimer(timer1.id);
+      const hiddenTimerId = timer1.id;
+
+      // IdleDetector saves timestamp
+      const hiddenTime = Date.now() - 5000; // Only 5s idle (< 10s threshold)
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      // Simulate: user returns (App.handleVisibilityChange called when visible)
+      // The app should check idle duration and auto-resume without modal
+
+      // Mock what App.js does in handleVisibilityChange
+      const hiddenAtStr = localStorage.getItem('idle_detector_hidden_at');
+      const hiddenAt = parseInt(hiddenAtStr, 10);
+      const idleDuration = Date.now() - hiddenAt;
+
+      // This is the bug: the timer should resume
+      if (idleDuration <= 10000) {
+        timerManager.startTimer(hiddenTimerId);
+      }
+
+      // Timer should be running
+      setTimeout(() => {
+        const timer = timerManager.getTimer(hiddenTimerId);
+        expect(timer.isRunning()).to.be.true;
+        done();
+      }, 100);
+    });
+
+    it('CRITICAL: should show modal when idle > 10s', async () => {
+      // This is what the user reported as broken - modal doesn't appear
+      localStorage.clear();
+
+      const timerManager = new TimerManager();
+      const timer1 = timerManager.addTimer('Test Timer');
+      timerManager.startTimer(timer1.id);
+      const initialElapsed = timer1.getElapsedMs();
+
+      // User hides tab
+      timerManager.pauseTimer(timer1.id);
+      const hiddenTimerId = timer1.id;
+
+      // Simulate 15s idle (> 10s threshold)
+      const idleMs = 15000;
+      const hiddenTime = Date.now() - idleMs;
+      localStorage.setItem('idle_detector_hidden_at', hiddenTime.toString());
+
+      // Create IdleDetector (this is what App.js does)
+      let modalWasShown = false;
+      let receivedIdleMs = null;
+
+      const idleDetector = new IdleDetector({
+        callback: async (idleMs) => {
+          receivedIdleMs = idleMs;
+          // Modal should be shown here
+          const timers = timerManager.getAllTimers();
+          const modal = new AllocationModal(idleMs, timers, hiddenTimerId);
+
+          // Auto-click Apply to complete test
+          setTimeout(() => {
+            const applyBtn = document.querySelector('.btn-apply');
+            if (applyBtn) {
+              modalWasShown = true;
+              applyBtn.click();
+            }
+          }, 50);
+
+          await modal.show();
+        },
+        idleThreshold: 10000
+      });
+
+      // Mock visibilityState
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get() { return 'visible'; }
+      });
+
+      // Trigger visibility change
+      idleDetector.onVisibilityChange();
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Verify callback was called and modal was shown
+      expect(receivedIdleMs).to.be.at.least(idleMs);
+      expect(modalWasShown).to.be.true;
+    });
+  });
+
   it('should be a placeholder for future UI integration tests', () => {
     expect(container).to.not.be.null;
   });

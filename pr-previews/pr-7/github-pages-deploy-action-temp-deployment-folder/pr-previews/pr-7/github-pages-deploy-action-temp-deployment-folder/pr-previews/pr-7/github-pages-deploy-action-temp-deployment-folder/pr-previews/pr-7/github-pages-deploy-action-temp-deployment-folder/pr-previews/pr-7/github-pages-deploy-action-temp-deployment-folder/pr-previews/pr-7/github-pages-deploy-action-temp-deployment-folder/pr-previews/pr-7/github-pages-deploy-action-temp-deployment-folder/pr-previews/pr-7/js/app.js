@@ -118,6 +118,7 @@ class App {
     this.resetAllBtn.addEventListener('click', () => this.handleResetAll());
     this.addTimerBtn.addEventListener('click', () => this.handleAddTimer());
     document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
+    console.log('App: visibilitychange listener attached');
   }
 
   /**

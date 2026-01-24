@@ -313,6 +313,12 @@ class App {
 
       // CRITICAL: Save to localStorage (survives page reload/navigation)
       localStorage.setItem('app_hidden_running_timers', JSON.stringify(Array.from(this.hiddenRunningTimers)));
+
+      // Save the running timer ID for idle allocation
+      if (this.hiddenRunningTimers.size > 0) {
+        const runningId = Array.from(this.hiddenRunningTimers)[0];
+        localStorage.setItem('pending_idle_previous_timer', runningId);
+      }
     }
     // Don't handle visible case - IdleDetector calls handleResume() or handleIdleReturn()
   }
@@ -372,9 +378,11 @@ class App {
    */
   async handleIdleReturn(idleMs, overridePreviousTimerId = null) {
     const timers = this.timerManager.getAllTimers();
-    const previousRunningId = overridePreviousTimerId || (this.hiddenRunningTimers.size > 0
-      ? Array.from(this.hiddenRunningTimers)[0]
-      : null);
+
+    // Get previous running timer from multiple sources
+    const previousRunningId = overridePreviousTimerId
+      || (this.hiddenRunningTimers.size > 0 ? Array.from(this.hiddenRunningTimers)[0] : null)
+      || localStorage.getItem('pending_idle_previous_timer');
 
     if (previousRunningId) {
       localStorage.setItem('pending_idle_previous_timer', previousRunningId);

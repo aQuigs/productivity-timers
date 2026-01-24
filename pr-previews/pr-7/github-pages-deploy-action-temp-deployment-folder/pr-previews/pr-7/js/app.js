@@ -436,9 +436,11 @@ class App {
     // Clear tracking and update displays
     this.hiddenRunningTimers.clear();
     localStorage.removeItem('app_hidden_running_timers');
-    // Clear accumulated idle now that modal was handled
-    localStorage.removeItem('accumulated_idle_ms');
     localStorage.removeItem('pending_idle_previous_timer');
+
+    // Clear accumulated idle and reset last active timestamp
+    this.idleDetector.clearAccumulatedIdle();
+
     this.updateAllTimerDisplays();
   }
 }

@@ -556,3 +556,129 @@ header h1 {
         width: 100%;
     }
 }
+
+.fixed-distribution-form,
+.percentage-distribution-form {
+    display: none;
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(99, 102, 241, 0.05);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 8px;
+}
+
+.fixed-distribution-form[style*="block"],
+.percentage-distribution-form[style*="block"] {
+    display: block;
+}
+
+.timer-allocation-row,
+.percentage-input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+.timer-allocation-row label,
+.percentage-input-row label {
+    min-width: 120px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.hours-input,
+.minutes-input,
+.percentage-input {
+    width: 80px;
+    padding: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.btn-hour-inc,
+.btn-hour-dec,
+.btn-min-inc,
+.btn-min-dec {
+    padding: 6px 10px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    transition: all 0.2s;
+}
+
+.btn-hour-inc:hover,
+.btn-hour-dec:hover,
+.btn-min-inc:hover,
+.btn-min-dec:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--accent-primary);
+}
+
+.fixed-distribution-remaining {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.remaining-time {
+    margin: 0 0 12px 0;
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+}
+
+.fixed-distribution-remaining label,
+.percentage-validation label {
+    color: var(--text-primary);
+    font-weight: 500;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.remainder-timer-select {
+    width: 100%;
+    max-width: 200px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.percentage-validation {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.percentage-total {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.percentage-total.valid {
+    color: #10b981;
+}
+
+.percentage-total.invalid {
+    color: #ef4444;
+}
+
+.btn-apply:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
