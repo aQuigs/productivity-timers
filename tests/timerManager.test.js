@@ -377,7 +377,7 @@ describe('TimerManager', () => {
       }, 50);
     });
 
-    it('should restore running timers as paused', () => {
+    it('should restore running timers as running (auto-resume)', () => {
       const manager1 = new TimerManager(2, storage);
       const timers1 = manager1.getAllTimers();
       manager1.startTimer(timers1[0].id);
@@ -385,8 +385,8 @@ describe('TimerManager', () => {
       const manager2 = new TimerManager(2, storage);
       const timers2 = manager2.getAllTimers();
 
-      expect(timers2[0].state).to.equal('paused');
-      expect(manager2.getRunningTimer()).to.be.null;
+      expect(timers2[0].state).to.equal('running');
+      expect(manager2.getRunningTimer()).to.equal(timers2[0]);
     });
 
     it('should initialize with defaults if storage is empty', () => {
