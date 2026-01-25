@@ -7,6 +7,7 @@ export class AllocationModal {
     this.resolvePromise = null;
     this.fixedAllocations = new Map();
     this.percentageAllocations = new Map();
+    this.updateInterval = null;
   }
 
   #formatTime(ms) {
@@ -267,6 +268,8 @@ export class AllocationModal {
   }
 
   #updateFixedRemaining() {
+    if (!this.modalElement) return;
+
     const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
     const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
 
@@ -280,10 +283,8 @@ export class AllocationModal {
     const remainingMs = Math.max(0, this.idleMs - allocatedMs);
     const remainingDisplay = this.modalElement.querySelector('.fixed-distribution-form .remaining-time');
     if (remainingDisplay) {
-      const { hours: h, minutes: m } = this.#msToHHMM(remainingMs);
-      const hh = String(h).padStart(2, '0');
-      const mm = String(m).padStart(2, '0');
-      remainingDisplay.textContent = `Remaining: ${hh}:${mm}`;
+      // Use same format as initial creation: MM:SS (strip HH: from HH:MM:SS)
+      remainingDisplay.textContent = `Remaining: ${this.#formatTime(remainingMs).substring(3)}`;
     }
   }
 
@@ -404,9 +405,32 @@ export class AllocationModal {
 
   #cleanup() {
     document.removeEventListener('keydown', this.boundHandleKeydown);
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
     if (this.modalElement && this.modalElement.parentNode) {
       this.modalElement.remove();
     }
+  }
+
+  #startDynamicUpdate() {
+    this.updateInterval = setInterval(() => {
+      const accumulatedIdleMs = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
+
+      if (accumulatedIdleMs > 0 && accumulatedIdleMs !== this.idleMs) {
+        this.idleMs = accumulatedIdleMs;
+
+        if (this.modalElement) {
+          const idleTimeDisplay = this.modalElement.querySelector('.idle-time-display');
+          if (idleTimeDisplay) {
+            idleTimeDisplay.textContent = `Idle time: ${this.#formatTime(this.idleMs)}`;
+          }
+
+          this.#updateFixedRemaining();
+        }
+      }
+    }, 500);
   }
 
   show() {
@@ -507,6 +531,8 @@ export class AllocationModal {
       document.body.appendChild(this.modalElement);
 
       applyButton.focus();
+
+      this.#startDynamicUpdate();
     });
   }
 }
