@@ -25,9 +25,7 @@ class App {
 
     this.idleDetector = new IdleDetector({
       callback: (idleMs) => this.handleIdleReturn(idleMs),
-      resumeCallback: () => this.handleResume(),
-      idleThreshold: 10000,
-      onSleepDetected: (sleepMs) => this.handleSleepDetected(sleepMs)
+      idleThreshold: 10000
     });
   }
 
@@ -319,8 +317,15 @@ class App {
         const runningId = Array.from(this.hiddenRunningTimers)[0];
         localStorage.setItem('pending_idle_previous_timer', runningId);
       }
+    } else {
+      // Tab visible - check if we should resume or wait for modal
+      const accumulated = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
+      if (accumulated <= 10000) {
+        // Short idle - just resume
+        this.handleResume();
+      }
+      // Otherwise IdleDetector will call handleIdleReturn() with accumulated time
     }
-    // Don't handle visible case - IdleDetector calls handleResume() or handleIdleReturn()
   }
 
   /**
@@ -373,10 +378,17 @@ class App {
   /**
    * Handle return from idle period
    * Shows modal for time allocation if idle duration exceeds threshold
+   * Otherwise just resumes timers
    * @param {number} idleMs - Idle duration in milliseconds (accumulated)
    * @param {string|null} overridePreviousTimerId - Optional override from pending idle restore
    */
   async handleIdleReturn(idleMs, overridePreviousTimerId = null) {
+    // If below threshold, just resume timers
+    if (idleMs <= 10000) {
+      this.handleResume();
+      return;
+    }
+
     const timers = this.timerManager.getAllTimers();
 
     // Get previous running timer from multiple sources
