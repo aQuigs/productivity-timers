@@ -47,14 +47,14 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 5000;
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
       Date.now = () => now;
 
       try {
-        detector.onVisibilityChange();
+        detector.checkIdle();
         expect(callbackCalled).to.be.false;
       } finally {
         Date.now = originalDateNow;
@@ -69,14 +69,14 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 10000;
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
       Date.now = () => now;
 
       try {
-        detector.onVisibilityChange();
+        detector.checkIdle();
         expect(callbackCalled).to.be.false;
       } finally {
         Date.now = originalDateNow;
@@ -91,14 +91,14 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 11000;
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
       Date.now = () => now;
 
       try {
-        detector.onVisibilityChange();
+        detector.checkIdle();
         expect(callbackCalled).to.be.true;
       } finally {
         Date.now = originalDateNow;
@@ -114,14 +114,14 @@ describe('IdleDetector', () => {
       const now = 100000;
       const expectedIdleDuration = 15000;
       const hiddenTime = now - expectedIdleDuration;
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock Date.now to return consistent timestamp
       const originalDateNow = Date.now;
       Date.now = () => now;
 
       try {
-        detector.onVisibilityChange();
+        detector.checkIdle();
         expect(receivedDuration).to.not.be.null;
         expect(receivedDuration).to.equal(expectedIdleDuration);
       } finally {
@@ -140,10 +140,10 @@ describe('IdleDetector', () => {
       });
 
       const beforeCall = Date.now();
-      detector.onVisibilityChange();
+      detector.checkIdle();
       const afterCall = Date.now();
 
-      const savedTimestamp = parseInt(localStorage.getItem('idle_detector_last_active'), 10);
+      const savedTimestamp = parseInt(localStorage.getItem('last_heartbeat'), 10);
       expect(savedTimestamp).to.be.at.least(beforeCall);
       expect(savedTimestamp).to.be.at.most(afterCall);
     });
@@ -154,7 +154,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 12000;
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock Date.now BEFORE creating detector so checkPendingIdle() uses mocked time
       const originalDateNow = Date.now;
@@ -183,7 +183,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 11000;
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock visibilityState to 'visible' for the test
       Object.defineProperty(document, 'visibilityState', {
@@ -196,9 +196,10 @@ describe('IdleDetector', () => {
       Date.now = () => now;
 
       try {
-        detector.onVisibilityChange();
-        const timestamp = localStorage.getItem('idle_detector_last_active');
-        expect(timestamp).to.be.null;
+        detector.checkIdle();
+        const timestamp = localStorage.getItem('last_heartbeat');
+        // With simple approach, heartbeat is updated to now, not cleared
+        expect(timestamp).to.equal(now.toString());
       } finally {
         Date.now = originalDateNow;
       }
@@ -209,7 +210,7 @@ describe('IdleDetector', () => {
 
       const now = 100000;
       const hiddenTime = now - 5000; // Only 5s idle, below threshold
-      localStorage.setItem('idle_detector_last_active', hiddenTime.toString());
+      localStorage.setItem('last_heartbeat', hiddenTime.toString());
 
       // Mock Date.now BEFORE creating detector
       const originalDateNow = Date.now;
@@ -223,7 +224,7 @@ describe('IdleDetector', () => {
 
       try {
         detector = new IdleDetector({ callback, idleThreshold: 10000 });
-        const timestamp = localStorage.getItem('idle_detector_last_active');
+        const timestamp = localStorage.getItem('last_heartbeat');
         // Should be updated to "now" after processing short idle
         expect(timestamp).to.equal(now.toString());
       } finally {

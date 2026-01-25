@@ -1,132 +1,66 @@
 class IdleDetector {
   constructor(options = {}) {
     this.callback = options.callback || (() => {});
-    this.resumeCallback = options.resumeCallback || (() => {});
-    this.onSleepDetected = options.onSleepDetected || (() => {});
     this.idleThreshold = options.idleThreshold || 10000;
-    this.lastActiveKey = 'idle_detector_last_active';
-    this.accumulatedIdleKey = 'accumulated_idle_ms';
-    this.sleepThreshold = 5000;
     this.heartbeatInterval = 1000;
     this.heartbeatTimer = null;
-    this.modalPending = false;
     this.init();
   }
 
   init() {
-    document.addEventListener('visibilitychange', this.onVisibilityChange.bind(this));
+    // Check for idle on load
+    this.checkIdle();
 
-    // Start heartbeat to detect sleep/wake
+    // Start heartbeat
     this.startHeartbeat();
 
-    // Check for pending accumulated idle on load
-    this.checkPendingIdle();
+    // Check on visibility change
+    document.addEventListener('visibilitychange', () => this.checkIdle());
   }
 
-  checkPendingIdle() {
-    const accumulatedIdle = parseInt(localStorage.getItem(this.accumulatedIdleKey) || '0', 10);
+  checkIdle() {
+    const lastHeartbeat = parseInt(localStorage.getItem('last_heartbeat') || '0', 10);
+    if (lastHeartbeat === 0) {
+      this.updateHeartbeat();
+      return;
+    }
 
-    if (accumulatedIdle > 0) {
-      if (accumulatedIdle > this.idleThreshold) {
-        this.modalPending = true;
-        this.callback(accumulatedIdle);
-      } else {
-        // Below threshold - resume timers but KEEP accumulated for next period
-        this.resumeCallback();
-        this.updateLastActive();
-      }
-    } else {
-      // Check if there's idle time since last active
-      const lastActive = parseInt(localStorage.getItem(this.lastActiveKey) || '0', 10);
-      if (lastActive > 0 && document.visibilityState === 'visible') {
-        const idleDuration = Date.now() - lastActive;
-        if (idleDuration > 1000) {
-          this.handleIdleDetected(idleDuration, false);
-          return;
-        }
-      }
-      // No pending idle, set last active to now
-      this.updateLastActive();
+    const now = Date.now();
+    const idle = now - lastHeartbeat;
+
+    // Only count significant idle (> 1 second)
+    if (idle < 1000) {
+      this.updateHeartbeat();
+      return;
+    }
+
+    // Add to accumulated
+    const accumulated = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
+    const total = accumulated + idle;
+    localStorage.setItem('accumulated_idle_ms', total.toString());
+
+    // Update heartbeat NOW so we don't double-count this period
+    this.updateHeartbeat();
+
+    // Only call callback if over threshold
+    if (total > this.idleThreshold) {
+      this.callback(total);
     }
   }
 
-  updateLastActive() {
-    localStorage.setItem(this.lastActiveKey, Date.now().toString());
+  updateHeartbeat() {
+    localStorage.setItem('last_heartbeat', Date.now().toString());
   }
 
   startHeartbeat() {
-    let lastHeartbeat = Date.now();
-
     this.heartbeatTimer = setInterval(() => {
-      const now = Date.now();
-      const gap = now - lastHeartbeat;
-
-      // If gap is much larger than interval, computer slept
-      if (gap > this.sleepThreshold && !this.modalPending) {
-        this.handleIdleDetected(gap, true);
-      }
-
-      lastHeartbeat = now;
+      this.updateHeartbeat();
     }, this.heartbeatInterval);
   }
 
-  handleIdleDetected(idleDuration, isSleep = false) {
-    if (this.modalPending) {
-      return; // Don't re-trigger if modal already pending
-    }
-
-    if (isSleep) {
-      this.onSleepDetected(idleDuration);
-    }
-
-    const existingAccumulated = parseInt(localStorage.getItem(this.accumulatedIdleKey) || '0', 10);
-    const totalIdle = existingAccumulated + idleDuration;
-
-    localStorage.setItem(this.accumulatedIdleKey, totalIdle.toString());
-
-    // Clear last_active to prevent re-triggering until user allocates
-    localStorage.removeItem(this.lastActiveKey);
-
-    if (totalIdle > this.idleThreshold) {
-      this.modalPending = true;
-      this.callback(totalIdle);
-    } else {
-      // Below threshold - just resume, but KEEP accumulated time for next idle period
-      this.resumeCallback();
-      // Reset last_active so next idle period can accumulate on top
-      this.updateLastActive();
-    }
-  }
-
   clearAccumulatedIdle() {
-    localStorage.removeItem(this.accumulatedIdleKey);
-    this.modalPending = false;
-    this.updateLastActive();
-  }
-
-  onVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-      if (this.modalPending) {
-        return; // Modal already showing, don't recalculate
-      }
-
-      const lastActive = parseInt(localStorage.getItem(this.lastActiveKey) || '0', 10);
-      if (lastActive > 0) {
-        const now = Date.now();
-        const idleDuration = now - lastActive;
-
-        if (idleDuration > 1000) {
-          this.handleIdleDetected(idleDuration, false);
-        } else {
-          this.updateLastActive();
-        }
-      } else {
-        this.updateLastActive();
-      }
-    } else if (document.visibilityState === 'hidden') {
-      // Tab becoming hidden - record the time we became inactive
-      this.updateLastActive();
-    }
+    localStorage.removeItem('accumulated_idle_ms');
+    this.updateHeartbeat();
   }
 
   destroy() {
@@ -134,7 +68,6 @@ class IdleDetector {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
-    document.removeEventListener('visibilitychange', this.onVisibilityChange.bind(this));
   }
 }
 
