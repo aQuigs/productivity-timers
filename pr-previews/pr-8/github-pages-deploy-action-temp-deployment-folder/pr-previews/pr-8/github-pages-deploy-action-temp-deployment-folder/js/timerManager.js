@@ -35,7 +35,8 @@ export class TimerManager {
 
   /**
    * Load state from storage
-   * Restores timers and auto-starts the previously running timer
+   * Note: Running timers are never restored as running because performance.now()
+   * baseline cannot be restored across page loads. They are converted to paused.
    * @returns {boolean} Success/failure
    */
   #loadFromStorage() {
@@ -46,19 +47,7 @@ export class TimerManager {
 
     try {
       this.#timers = state.timers.map(timerData => Timer.fromJSON(timerData));
-
-      // Restore and auto-start previously running timer
-      if (state.runningTimerId) {
-        const timer = this.#timers.find(t => t.id === state.runningTimerId);
-        if (timer) {
-          this.#runningTimerId = state.runningTimerId;
-          timer.start();
-        } else {
-          this.#runningTimerId = null;
-        }
-      } else {
-        this.#runningTimerId = null;
-      }
+      this.#runningTimerId = null;
       return true;
     } catch (error) {
       console.error('Failed to restore timers from storage:', error);
