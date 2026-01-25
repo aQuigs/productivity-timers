@@ -27,13 +27,13 @@ class IdleDetector {
     const accumulatedIdle = parseInt(localStorage.getItem(this.accumulatedIdleKey) || '0', 10);
 
     if (accumulatedIdle > 0) {
-      this.modalPending = true;
       if (accumulatedIdle > this.idleThreshold) {
+        this.modalPending = true;
         this.callback(accumulatedIdle);
       } else {
+        // Below threshold - resume timers but KEEP accumulated for next period
         this.resumeCallback();
-        localStorage.removeItem(this.accumulatedIdleKey);
-        this.modalPending = false;
+        this.updateLastActive();
       }
     } else {
       // Check if there's idle time since last active
@@ -83,17 +83,17 @@ class IdleDetector {
     const totalIdle = existingAccumulated + idleDuration;
 
     localStorage.setItem(this.accumulatedIdleKey, totalIdle.toString());
-    this.modalPending = true;
 
     // Clear last_active to prevent re-triggering until user allocates
     localStorage.removeItem(this.lastActiveKey);
 
     if (totalIdle > this.idleThreshold) {
+      this.modalPending = true;
       this.callback(totalIdle);
     } else {
+      // Below threshold - just resume, but KEEP accumulated time for next idle period
       this.resumeCallback();
-      localStorage.removeItem(this.accumulatedIdleKey);
-      this.modalPending = false;
+      // Reset last_active so next idle period can accumulate on top
       this.updateLastActive();
     }
   }
