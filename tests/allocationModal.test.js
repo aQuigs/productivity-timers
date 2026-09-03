@@ -150,6 +150,33 @@ describe('AllocationModal', () => {
       const strategy1 = document.querySelector('.allocation-modal input[value="previous-timer"]');
       expect(strategy1.disabled).to.be.false;
     });
+
+    it('should keep the "selected timer" option visible when another strategy is chosen', () => {
+      const timers = [{ id: 'timer-1', title: 'Timer 1' }];
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+
+      document.querySelector('.allocation-modal input[value="previous-timer"]').click();
+
+      const radio = document.querySelector('.allocation-modal input[value="selected-timer"]');
+      expect(radio.closest('.strategy-option').style.display).to.not.equal('none');
+      expect(radio.getClientRects().length).to.be.greaterThan(0);
+    });
+
+    it('should show the timer dropdown only while "selected timer" is chosen', () => {
+      const timers = [{ id: 'timer-1', title: 'Timer 1' }];
+      modal = new AllocationModal(60000, timers, null);
+      modal.show();
+
+      const dropdown = document.querySelector('.allocation-modal select.timer-select');
+      expect(dropdown.getClientRects().length).to.equal(0);
+
+      document.querySelector('.allocation-modal input[value="selected-timer"]').click();
+      expect(dropdown.getClientRects().length).to.be.greaterThan(0);
+
+      document.querySelector('.allocation-modal input[value="discard"]').click();
+      expect(dropdown.getClientRects().length).to.equal(0);
+    });
   });
 
   describe('Apply Button and Promise Resolution', () => {
@@ -383,7 +410,12 @@ describe('AllocationModal', () => {
       const promise = modal.show();
 
       const strategy4Radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
-      strategy4Radio.checked = true;
+      strategy4Radio.click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      percentageInputs[0].value = 60;
+      percentageInputs[1].value = 40;
+      percentageInputs[0].dispatchEvent(new Event('input'));
 
       const applyButton = document.querySelector('.allocation-modal button.btn-apply');
       applyButton.click();
@@ -544,6 +576,60 @@ describe('AllocationModal', () => {
           expect(result.config.remainderTimerId).to.equal('timer-3');
           done();
         }).catch(done);
+      }, 50);
+    });
+
+    it('should include hours in the remaining time display', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(9000000, timers, null);
+      modal.show();
+
+      document.querySelector('.allocation-modal input[value="fixed-distribution"]').click();
+
+      const remainingDisplay = document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time');
+      expect(remainingDisplay.textContent).to.include('02:30:00');
+
+      const hoursInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .hours-input');
+      hoursInputs[0].value = 1;
+      hoursInputs[0].dispatchEvent(new Event('input'));
+
+      setTimeout(() => {
+        expect(remainingDisplay.textContent).to.include('01:30:00');
+        done();
+      }, 50);
+    });
+
+    it('should treat negative fixed inputs as zero so they cannot mask an over-allocation', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(3600000, timers, null);
+      const promise = modal.show();
+      let resolved = false;
+      promise.then(() => { resolved = true; });
+
+      document.querySelector('.allocation-modal input[value="fixed-distribution"]').click();
+
+      const hoursInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .hours-input');
+      hoursInputs[0].value = -1;
+      hoursInputs[1].value = 2;
+      hoursInputs[1].dispatchEvent(new Event('input'));
+
+      const remainingDisplay = document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time');
+      expect(remainingDisplay.textContent).to.include('00:00:00');
+
+      document.querySelector('.allocation-modal button.btn-apply').click();
+
+      setTimeout(() => {
+        expect(resolved).to.be.false;
+        expect(document.querySelector('.allocation-modal')).to.exist;
+        const error = document.querySelector('.allocation-modal .fixed-distribution-form .allocation-error');
+        expect(error.style.display).to.not.equal('none');
+        done();
       }, 50);
     });
   });
@@ -756,6 +842,94 @@ describe('AllocationModal', () => {
         done();
       }, 50);
     });
+
+    it('should re-enable Apply when switching away from an invalid percentage split', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      document.querySelector('.allocation-modal input[value="percentage-distribution"]').click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      percentageInputs[0].value = 50;
+      percentageInputs[1].value = 30;
+      percentageInputs[0].dispatchEvent(new Event('input'));
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      expect(applyButton.disabled).to.be.true;
+
+      document.querySelector('.allocation-modal input[value="discard"]').click();
+
+      setTimeout(() => {
+        expect(applyButton.disabled).to.be.false;
+        done();
+      }, 50);
+    });
+
+    it('should disable Apply as soon as percentage distribution is selected with nothing allocated', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      const applyButton = document.querySelector('.allocation-modal button.btn-apply');
+      expect(applyButton.disabled).to.be.false;
+
+      document.querySelector('.allocation-modal input[value="percentage-distribution"]').click();
+      expect(applyButton.disabled).to.be.true;
+    });
+
+    it('should refuse to apply a percentage split that does not sum to 100 even if forced', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      const promise = modal.show();
+      let resolved = false;
+      promise.then(() => { resolved = true; });
+
+      const radio = document.querySelector('.allocation-modal input[value="percentage-distribution"]');
+      radio.checked = true;
+
+      document.querySelector('.allocation-modal button.btn-apply').click();
+
+      setTimeout(() => {
+        expect(resolved).to.be.false;
+        expect(document.querySelector('.allocation-modal')).to.exist;
+        const error = document.querySelector('.allocation-modal .percentage-distribution-form .allocation-error');
+        expect(error).to.exist;
+        expect(error.style.display).to.not.equal('none');
+        done();
+      }, 50);
+    });
+
+    it('should treat negative percentage inputs as zero when totalling', () => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' },
+        { id: 'timer-3', title: 'Timer 3' }
+      ];
+      modal = new AllocationModal(10000, timers, null);
+      modal.show();
+
+      document.querySelector('.allocation-modal input[value="percentage-distribution"]').click();
+
+      const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      percentageInputs[0].value = -50;
+      percentageInputs[1].value = 100;
+      percentageInputs[2].value = 50;
+      percentageInputs[0].dispatchEvent(new Event('input'));
+
+      const totalDisplay = document.querySelector('.allocation-modal .percentage-distribution-form .percentage-total');
+      expect(totalDisplay.textContent).to.include('Total: 150%');
+      expect(document.querySelector('.allocation-modal button.btn-apply').disabled).to.be.true;
+    });
   });
 
   describe('Dynamic Time Updates', () => {
@@ -827,6 +1001,41 @@ describe('AllocationModal', () => {
             done();
           }, 600);
         }, 50);
+      }, 50);
+    });
+
+    it('should resolve with the initial idle time when it never changed', (done) => {
+      modal = new AllocationModal(60000, [], null);
+      const promise = modal.show();
+
+      document.querySelector('.allocation-modal button.btn-apply').click();
+
+      promise.then(result => {
+        expect(result.idleMs).to.equal(60000);
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve with the updated idle time after a dynamic update', (done) => {
+      const initialIdleMs = 15000;
+      localStorage.setItem('accumulated_idle_ms', initialIdleMs.toString());
+
+      modal = new AllocationModal(initialIdleMs, [], 'timer-1');
+      const promise = modal.show();
+
+      setTimeout(() => {
+        localStorage.setItem('accumulated_idle_ms', '25000');
+
+        setTimeout(() => {
+          document.querySelector('.allocation-modal input[value="previous-timer"]').click();
+          document.querySelector('.allocation-modal button.btn-apply').click();
+
+          promise.then(result => {
+            expect(result.strategy).to.equal('previous-timer');
+            expect(result.idleMs).to.equal(25000);
+            done();
+          }).catch(done);
+        }, 600);
       }, 50);
     });
 

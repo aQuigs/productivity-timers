@@ -1,4 +1,5 @@
 import { formatDuration } from './formatDuration.js';
+import IdleDetector from './idleDetector.js';
 
 const STRATEGY_COPY = {
   'previous-timer': {
@@ -30,17 +31,64 @@ export class AllocationModal {
     this.previousRunningId = previousRunningId;
     this.modalElement = null;
     this.resolvePromise = null;
-    this.fixedAllocations = new Map();
-    this.percentageAllocations = new Map();
     this.updateInterval = null;
   }
 
-  #formatTime(ms) {
-    return formatDuration(ms);
+  #selectedStrategy() {
+    return this.modalElement.querySelector('input[name="strategy"]:checked').value;
   }
 
   #hhmmToMs(hours, minutes) {
     return (hours * 3600 + minutes * 60) * 1000;
+  }
+
+  // min="0" only affects the spinner; typed negatives would offset other rows' totals
+  #readNonNegative(input) {
+    return Math.max(0, Number(input.value) || 0);
+  }
+
+  /** @returns {Array<[string, number]>} [timerId, milliseconds] per fixed-distribution row */
+  #readFixedRows() {
+    const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
+    const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
+
+    return Array.from(hoursInputs, (input, idx) => [
+      input.dataset.timerId,
+      this.#hhmmToMs(this.#readNonNegative(input), this.#readNonNegative(minutesInputs[idx]))
+    ]);
+  }
+
+  /** @returns {Array<[string, number]>} [timerId, percentage] per percentage-distribution row */
+  #readPercentageRows() {
+    const inputs = this.modalElement.querySelectorAll('.percentage-distribution-form .percentage-input');
+    return Array.from(inputs, input => [input.dataset.timerId, this.#readNonNegative(input)]);
+  }
+
+  #sumFixedInputs() {
+    return this.#readFixedRows().reduce((sum, [, ms]) => sum + ms, 0);
+  }
+
+  #sumPercentageInputs() {
+    return this.#readPercentageRows().reduce((sum, [, percentage]) => sum + percentage, 0);
+  }
+
+  #createErrorMessage() {
+    const errorMsg = document.createElement('p');
+    errorMsg.className = 'allocation-error';
+    errorMsg.setAttribute('role', 'alert');
+    errorMsg.style.display = 'none';
+    return errorMsg;
+  }
+
+  #showError(formSelector, message) {
+    const errorMsg = this.modalElement.querySelector(`${formSelector} .allocation-error`);
+    if (!errorMsg) return;
+    if (message) {
+      errorMsg.textContent = message;
+      errorMsg.style.display = 'block';
+    } else {
+      errorMsg.style.display = 'none';
+    }
   }
 
   #createStrategyOption(value, disabled = false) {
@@ -135,11 +183,7 @@ export class AllocationModal {
     form.className = 'fixed-distribution-form strategy-detail';
     form.style.display = 'none';
 
-    const errorMsg = document.createElement('p');
-    errorMsg.className = 'allocation-error';
-    errorMsg.setAttribute('role', 'alert');
-    errorMsg.style.display = 'none';
-    form.appendChild(errorMsg);
+    form.appendChild(this.#createErrorMessage());
 
     this.timers.forEach(timer => {
       const row = document.createElement('div');
@@ -176,7 +220,7 @@ export class AllocationModal {
 
     const remainingDisplay = document.createElement('p');
     remainingDisplay.className = 'remaining-time';
-    remainingDisplay.textContent = `Remaining: ${this.#formatTime(this.idleMs)}`;
+    remainingDisplay.textContent = `Remaining: ${formatDuration(this.idleMs)}`;
 
     const remainderSelect = document.createElement('select');
     remainderSelect.className = 'remainder-timer-select';
@@ -204,6 +248,8 @@ export class AllocationModal {
     const form = document.createElement('div');
     form.className = 'percentage-distribution-form strategy-detail';
     form.style.display = 'none';
+
+    form.appendChild(this.#createErrorMessage());
 
     this.timers.forEach(timer => {
       const row = document.createElement('div');
@@ -255,8 +301,7 @@ export class AllocationModal {
   }
 
   #updateStrategyForms() {
-    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
-    const strategy = selectedRadio.value;
+    const strategy = this.#selectedStrategy();
 
     const fixedForm = this.modalElement.querySelector('.fixed-distribution-form');
     const percentageForm = this.modalElement.querySelector('.percentage-distribution-form');
@@ -266,41 +311,27 @@ export class AllocationModal {
     percentageForm.style.display = strategy === 'percentage-distribution' ? 'block' : 'none';
     timerDetail.style.display = strategy === 'selected-timer' ? 'block' : 'none';
 
-    const applyButton = this.modalElement.querySelector('.btn-apply');
+    // Only the percentage strategy has a state where Apply can never succeed
     if (strategy === 'percentage-distribution') {
       this.#updatePercentageValidation();
     } else {
-      applyButton.disabled = false;
+      this.modalElement.querySelector('.btn-apply').disabled = false;
     }
   }
 
   #updateFixedRemaining() {
     if (!this.modalElement) return;
 
-    const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
-    const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
-
-    let allocatedMs = 0;
-    hoursInputs.forEach((input, idx) => {
-      const hours = Number(input.value) || 0;
-      const minutes = Number(minutesInputs[idx].value) || 0;
-      allocatedMs += this.#hhmmToMs(hours, minutes);
-    });
-
-    const remainingMs = Math.max(0, this.idleMs - allocatedMs);
+    const remainingMs = Math.max(0, this.idleMs - this.#sumFixedInputs());
     const remainingDisplay = this.modalElement.querySelector('.fixed-distribution-form .remaining-time');
     if (remainingDisplay) {
-      remainingDisplay.textContent = `Remaining: ${this.#formatTime(remainingMs)}`;
+      remainingDisplay.textContent = `Remaining: ${formatDuration(remainingMs)}`;
     }
   }
 
   #updatePercentageValidation() {
     const form = this.modalElement.querySelector('.percentage-distribution-form');
-    const inputs = form.querySelectorAll('.percentage-input');
-    let total = 0;
-    inputs.forEach(input => {
-      total += Number(input.value) || 0;
-    });
+    const total = this.#sumPercentageInputs();
 
     const totalDisplay = form.querySelector('.percentage-total');
     if (totalDisplay) {
@@ -313,13 +344,15 @@ export class AllocationModal {
       meterFill.style.setProperty('--pct', `${Math.min(100, total)}%`);
     }
 
-    const applyButton = this.modalElement.querySelector('.btn-apply');
-    applyButton.disabled = total !== 100;
+    if (total === 100) {
+      this.#showError('.percentage-distribution-form', null);
+    }
+
+    this.modalElement.querySelector('.btn-apply').disabled = total !== 100;
   }
 
   #getSelectedStrategy() {
-    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
-    const strategy = selectedRadio.value;
+    const strategy = this.#selectedStrategy();
     const config = {};
 
     if (strategy === 'previous-timer') {
@@ -328,69 +361,52 @@ export class AllocationModal {
       const dropdown = this.modalElement.querySelector('select.timer-select');
       config.timerId = dropdown.value;
     } else if (strategy === 'fixed-distribution') {
-      config.allocations = new Map();
-      const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
-      const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
-
-      hoursInputs.forEach((input, idx) => {
-        const timerId = input.dataset.timerId;
-        const hours = Number(input.value) || 0;
-        const minutes = Number(minutesInputs[idx].value) || 0;
-        const ms = this.#hhmmToMs(hours, minutes);
-        if (ms > 0) {
-          config.allocations.set(timerId, ms);
-        }
-      });
-
+      config.allocations = new Map(this.#readFixedRows().filter(([, ms]) => ms > 0));
       const remainderSelect = this.modalElement.querySelector('.fixed-distribution-form .remainder-timer-select');
       config.remainderTimerId = remainderSelect.value;
     } else if (strategy === 'percentage-distribution') {
-      config.percentages = new Map();
-      const inputs = this.modalElement.querySelectorAll('.percentage-distribution-form .percentage-input');
-
-      inputs.forEach(input => {
-        const timerId = input.dataset.timerId;
-        const percentage = Number(input.value) || 0;
-        if (percentage > 0) {
-          config.percentages.set(timerId, percentage);
-        }
-      });
+      config.percentages = new Map(this.#readPercentageRows().filter(([, percentage]) => percentage > 0));
     }
 
-    return { strategy, config };
+    // idleMs may have grown since the modal opened (see #startDynamicUpdate)
+    return { strategy, config, idleMs: this.idleMs };
   }
 
   #validateFixedAllocation() {
-    const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
-    const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
+    const allocatedMs = this.#sumFixedInputs();
 
-    let allocatedMs = 0;
-    hoursInputs.forEach((input, idx) => {
-      const hours = Number(input.value) || 0;
-      const minutes = Number(minutesInputs[idx].value) || 0;
-      allocatedMs += this.#hhmmToMs(hours, minutes);
-    });
-
-    const errorMsg = this.modalElement.querySelector('.fixed-distribution-form .allocation-error');
     if (allocatedMs > this.idleMs) {
-      if (errorMsg) {
-        errorMsg.textContent = `Allocated time exceeds the idle time by ${this.#formatTime(allocatedMs - this.idleMs)}`;
-        errorMsg.style.display = 'block';
-      }
+      this.#showError(
+        '.fixed-distribution-form',
+        `Allocated time exceeds the idle time by ${formatDuration(allocatedMs - this.idleMs)}`
+      );
       return false;
     }
 
-    if (errorMsg) {
-      errorMsg.style.display = 'none';
+    this.#showError('.fixed-distribution-form', null);
+    return true;
+  }
+
+  #validatePercentageAllocation() {
+    const total = this.#sumPercentageInputs();
+
+    if (total !== 100) {
+      this.#showError('.percentage-distribution-form', `Percentages must total 100% (currently ${total}%)`);
+      return false;
     }
+
+    this.#showError('.percentage-distribution-form', null);
     return true;
   }
 
   #handleApply() {
-    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
-    const strategy = selectedRadio.value;
+    const strategy = this.#selectedStrategy();
 
     if (strategy === 'fixed-distribution' && !this.#validateFixedAllocation()) {
+      return;
+    }
+
+    if (strategy === 'percentage-distribution' && !this.#validatePercentageAllocation()) {
       return;
     }
 
@@ -404,7 +420,7 @@ export class AllocationModal {
   #handleCancel() {
     this.#cleanup();
     if (this.resolvePromise) {
-      this.resolvePromise({ strategy: 'discard', config: {} });
+      this.resolvePromise({ strategy: 'discard', config: {}, idleMs: this.idleMs });
     }
   }
 
@@ -427,7 +443,7 @@ export class AllocationModal {
 
   #startDynamicUpdate() {
     this.updateInterval = setInterval(() => {
-      const accumulatedIdleMs = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
+      const accumulatedIdleMs = IdleDetector.readAccumulatedIdleMs();
 
       if (accumulatedIdleMs > 0 && accumulatedIdleMs !== this.idleMs) {
         this.idleMs = accumulatedIdleMs;
@@ -435,7 +451,7 @@ export class AllocationModal {
         if (this.modalElement) {
           const idleTimeDisplay = this.modalElement.querySelector('.idle-time-display');
           if (idleTimeDisplay) {
-            idleTimeDisplay.textContent = this.#formatTime(this.idleMs);
+            idleTimeDisplay.textContent = formatDuration(this.idleMs);
           }
 
           this.#updateFixedRemaining();
@@ -463,7 +479,7 @@ export class AllocationModal {
 
     const idleTimeDisplay = document.createElement('span');
     idleTimeDisplay.className = 'idle-time-display';
-    idleTimeDisplay.textContent = this.#formatTime(this.idleMs);
+    idleTimeDisplay.textContent = formatDuration(this.idleMs);
 
     lead.append('You were away for ', idleTimeDisplay, '. Where should that time go?');
 

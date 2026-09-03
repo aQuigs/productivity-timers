@@ -23,10 +23,11 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 
 ```
 timers/
-├── index.html                 # Main HTML entry point (top bar, timer grid)
+├── index.html                 # Main HTML entry point (top bar, timer grid; loads js/main.js)
 ├── css/styles.css            # Styling: design tokens, dark + light (prefers-color-scheme)
 ├── js/
-│   ├── app.js               # App: DOM rendering, event binding, RAF update loop
+│   ├── main.js              # Bootstrap: creates App on DOMContentLoaded (keeps app.js importable in tests)
+│   ├── app.js               # App: DOM rendering, event binding, RAF update loop, idle flow
 │   ├── timer.js             # Timer: individual timer state (private fields)
 │   ├── timerManager.js      # TimerManager: orchestrates timers, enforces chess-clock
 │   ├── storageService.js    # StorageService: localStorage persistence + validation
@@ -35,6 +36,8 @@ timers/
 │   ├── timeDistributor.js   # Pure allocation strategies (single/fixed/percentage)
 │   └── formatDuration.js    # Shared HH:MM:SS formatter used by Timer, modal, header
 ├── tests/                    # Web Test Runner test suite (Mocha/Chai)
+│   ├── helpers.js            # Shared test helpers (visibility simulation)
+│   ├── app.test.js           # App flows: startup, visibility, persistence, rendering
 │   ├── timer.test.js
 │   ├── timerManager.test.js
 │   ├── storageService.test.js
@@ -76,11 +79,23 @@ timers/
 - Gracefully handles localStorage unavailability
 
 **App (app.js)**
-- DOM initialization and event binding
+- DOM initialization and event binding; exported as a class, bootstrapped by `main.js`
 - Renders timer cards dynamically
 - Uses `requestAnimationFrame` for efficient display updates
 - Tracks running timers that should resume when page visibility changes
-- Only updates DOM when display values actually change (optimization)
+- The RAF loop only touches the DOM when a timer's formatted time or state changes (`lastDisplayedValues` / `lastDisplayedStates`); `applyTimerState()` is the single place that syncs button, `.active` class and status label
+- Persists a running timer's elapsed time once per second (on display tick) so a crash loses at most a second
+- `destroy()` tears down the RAF loop and the IdleDetector (used by tests)
+
+**IdleDetector (idleDetector.js)**
+- Stamps `last_heartbeat` in localStorage every second while the tab is visible
+- On hide: stamps once, stops the heartbeat (so the next check measures the whole hidden period), and calls `onHidden`
+- On show/load: folds the gap since the last stamp into `accumulated_idle_ms`; on show calls `onVisible(total)`; invokes `callback(total)` when the total exceeds the threshold (`DEFAULT_IDLE_THRESHOLD_MS`, 10 s)
+- `checkIdle()` returns the accumulated total and is safe to call repeatedly
+
+**AllocationModal (allocationModal.js)** / **TimeDistributor (timeDistributor.js)**
+- Modal resolves `{ strategy, config, idleMs }`; `idleMs` is the total it last displayed (it polls `accumulated_idle_ms` while open)
+- Distributor functions add the remainder to a timer that already has a share; with no remainder timer, rounding dust goes to the largest share
 
 ### Key Behaviors
 
@@ -92,17 +107,17 @@ When a user starts timer B while timer A is running:
 4. Only one timer's time advances at a time
 
 **Page Visibility Handling:**
-- When document becomes hidden: running timers are paused, IDs stored in `hiddenRunningTimers`
-- When document becomes visible again: timers in `hiddenRunningTimers` are resumed
-- Prevents time accumulation when tab is in background
+- IdleDetector owns the `visibilitychange` listener and calls App's `onHidden` / `onVisible(total)` hooks; App registers no listener of its own
+- On hidden (`App.handleHidden()`): running timers are paused and their IDs stored in `hiddenRunningTimers`, mirrored to localStorage because browsers fire `visibilitychange` → hidden on unload. While a modal is open the set is only replaced if something was actually running, so it keeps naming the timer to resume
+- On visible and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes. Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
+- If the app loads in a hidden tab, `init()` calls `handleHidden()` instead
 
 **Persistence:**
-- Every state change (start, pause, add, remove, title update) triggers `#persist()`
+- Every state change (start, pause, add, remove, title update, reset) triggers `TimerManager.persist()`
 - Individual timer operations: `resetTimer(id)`, `updateTimerTitle(id, newTitle)` - all trigger persistence
 - On page load, TimerManager attempts to restore timers from localStorage
-- Running timers are converted to paused on restore (can't restore `performance.now()` baseline)
+- The previously running timer is auto-started on restore (from its saved elapsed time); the gap since the last save is handled by the IdleDetector
 - `App.handleResetAll()` delegates to `TimerManager.resetAll()` so the reset is persisted like every other state change
-- The RAF loop only touches the DOM when a timer's formatted time or state changes (`lastDisplayedValues` / `lastDisplayedStates`); `applyTimerState()` is the single place that syncs button, `.active` class and status label
 
 ## Commands
 
