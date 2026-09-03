@@ -16,23 +16,25 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - Editable timer titles
 - Page visibility handling: pauses running timers when tab becomes hidden
 - localStorage persistence: timer state persists across page reloads
-- Dark theme UI with responsive design
+- Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
+- Header shows the running total across all timers
 
 ## Project Structure
 
 ```
 timers/
-├── index.html                 # Main HTML entry point (loads js/main.js)
-├── css/styles.css            # Styling (dark theme)
+├── index.html                 # Main HTML entry point (top bar, timer grid; loads js/main.js)
+├── css/styles.css            # Styling: design tokens, dark + light (prefers-color-scheme)
 ├── js/
 │   ├── main.js              # Bootstrap: creates App on DOMContentLoaded (keeps app.js importable in tests)
 │   ├── app.js               # App: DOM rendering, event binding, RAF update loop, idle flow
 │   ├── timer.js             # Timer: individual timer state (private fields)
 │   ├── timerManager.js      # TimerManager: orchestrates timers, enforces chess-clock
 │   ├── storageService.js    # StorageService: localStorage persistence + validation
-│   ├── idleDetector.js      # IdleDetector: heartbeat-based idle tracking across hide/reload
-│   ├── timeDistributor.js   # Pure allocation strategies for idle time
-│   └── allocationModal.js   # AllocationModal: idle-time allocation dialog
+│   ├── idleDetector.js      # IdleDetector: heartbeat-based away-time tracking
+│   ├── allocationModal.js   # AllocationModal: "where should idle time go" dialog
+│   ├── timeDistributor.js   # Pure allocation strategies (single/fixed/percentage)
+│   └── formatDuration.js    # Shared HH:MM:SS formatter used by Timer, modal, header
 ├── tests/                    # Web Test Runner test suite (Mocha/Chai)
 │   ├── helpers.js            # Shared test helpers (visibility simulation)
 │   ├── app.test.js           # App flows: startup, visibility, persistence, rendering
@@ -40,11 +42,12 @@ timers/
 │   ├── timerManager.test.js
 │   ├── storageService.test.js
 │   ├── idleDetector.test.js
-│   ├── timeDistributor.test.js
 │   ├── allocationModal.test.js
+│   ├── timeDistributor.test.js
+│   ├── formatDuration.test.js
 │   ├── integration.test.js
-│   ├── layout.test.js
-│   ├── closeButton.test.js
+│   ├── layout.test.js        # CSS contracts: grid widths, tabular digits, top bar overflow
+│   ├── closeButton.test.js   # Remove button must stay 36px square with red tint
 │   └── closeButtonReal.test.js
 ├── web-test-runner.config.js # Test runner configuration
 └── package.json              # Dependencies: @web/test-runner, Playwright
@@ -80,9 +83,9 @@ timers/
 - Renders timer cards dynamically
 - Uses `requestAnimationFrame` for efficient display updates
 - Tracks running timers that should resume when page visibility changes
-- Only updates DOM when display values or running state actually change (optimization)
+- The RAF loop only touches the DOM when a timer's formatted time or state changes (`lastDisplayedValues` / `lastDisplayedStates`); `applyTimerState()` is the single place that syncs button, `.active` class and status label
 - Persists a running timer's elapsed time once per second (on display tick) so a crash loses at most a second
-- `destroy()` tears down the RAF loop, listeners, and the IdleDetector (used by tests)
+- `destroy()` tears down the RAF loop and the IdleDetector (used by tests)
 
 **IdleDetector (idleDetector.js)**
 - Stamps `last_heartbeat` in localStorage every second while the tab is visible
@@ -114,7 +117,7 @@ When a user starts timer B while timer A is running:
 - Individual timer operations: `resetTimer(id)`, `updateTimerTitle(id, newTitle)` - all trigger persistence
 - On page load, TimerManager attempts to restore timers from localStorage
 - The previously running timer is auto-started on restore (from its saved elapsed time); the gap since the last save is handled by the IdleDetector
-- `App.handleResetAll()` delegates to `TimerManager.resetAll()` so the reset is persisted
+- `App.handleResetAll()` delegates to `TimerManager.resetAll()` so the reset is persisted like every other state change
 
 ## Commands
 

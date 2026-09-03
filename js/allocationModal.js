@@ -1,3 +1,28 @@
+import { formatDuration } from './formatDuration.js';
+
+const STRATEGY_COPY = {
+  'previous-timer': {
+    name: 'Add all to the previous timer',
+    description: 'Everything goes to the timer that was running when you stepped away.'
+  },
+  'selected-timer': {
+    name: 'Add all to one timer',
+    description: 'Pick any timer to receive the whole block.'
+  },
+  'fixed-distribution': {
+    name: 'Split by fixed amounts',
+    description: 'Give each timer a set number of hours and minutes.'
+  },
+  'percentage-distribution': {
+    name: 'Split by percentage',
+    description: 'Divide the time proportionally. Percentages must add up to 100.'
+  },
+  'discard': {
+    name: 'Discard it',
+    description: 'Nothing is added. Timers resume where they left off.'
+  }
+};
+
 export class AllocationModal {
   constructor(idleMs, timers, previousRunningId) {
     this.idleMs = idleMs;
@@ -9,16 +34,7 @@ export class AllocationModal {
   }
 
   #formatTime(ms) {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    const hh = String(hours).padStart(2, '0');
-    const mm = String(minutes).padStart(2, '0');
-    const ss = String(seconds).padStart(2, '0');
-
-    return `${hh}:${mm}:${ss}`;
+    return formatDuration(ms);
   }
 
   #hhmmToMs(hours, minutes) {
@@ -58,10 +74,8 @@ export class AllocationModal {
   #createErrorMessage() {
     const errorMsg = document.createElement('p');
     errorMsg.className = 'allocation-error';
+    errorMsg.setAttribute('role', 'alert');
     errorMsg.style.display = 'none';
-    errorMsg.style.color = '#ef4444';
-    errorMsg.style.marginBottom = '12px';
-    errorMsg.style.fontSize = '0.875rem';
     return errorMsg;
   }
 
@@ -76,7 +90,7 @@ export class AllocationModal {
     }
   }
 
-  #createStrategyOption(value, label, disabled = false) {
+  #createStrategyOption(value, disabled = false) {
     const container = document.createElement('div');
     container.className = 'strategy-option';
 
@@ -88,12 +102,26 @@ export class AllocationModal {
     if (value === 'discard') {
       radio.checked = true;
     }
-
     radio.addEventListener('change', () => this.#updateStrategyForms());
 
+    const text = document.createElement('span');
+    text.className = 'strategy-text';
+
+    const name = document.createElement('span');
+    name.className = 'strategy-name';
+    name.textContent = STRATEGY_COPY[value].name;
+
+    const description = document.createElement('span');
+    description.className = 'strategy-desc';
+    description.textContent = STRATEGY_COPY[value].description;
+
+    text.appendChild(name);
+    text.appendChild(description);
+
     const labelElement = document.createElement('label');
-    labelElement.textContent = label;
-    labelElement.prepend(radio);
+    labelElement.className = 'strategy-label';
+    labelElement.appendChild(radio);
+    labelElement.appendChild(text);
 
     container.appendChild(labelElement);
     return container;
@@ -102,6 +130,7 @@ export class AllocationModal {
   #createTimerDropdown() {
     const select = document.createElement('select');
     select.className = 'timer-select';
+    select.setAttribute('aria-label', 'Timer to receive the idle time');
 
     this.timers.forEach(timer => {
       const option = document.createElement('option');
@@ -113,9 +142,44 @@ export class AllocationModal {
     return select;
   }
 
+  #createStepButton(className, text, ariaLabel, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = text;
+    button.setAttribute('aria-label', ariaLabel);
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      onClick();
+    });
+    return button;
+  }
+
+  #createNumberInput(className, timer, unitLabel, max) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = className;
+    input.inputMode = 'numeric';
+    input.min = '0';
+    if (max !== undefined) {
+      input.max = String(max);
+    }
+    input.value = '0';
+    input.dataset.timerId = timer.id;
+    input.setAttribute('aria-label', `${timer.title} ${unitLabel}`);
+    return input;
+  }
+
+  #createStepper(children) {
+    const stepper = document.createElement('div');
+    stepper.className = 'stepper';
+    children.forEach(child => stepper.appendChild(child));
+    return stepper;
+  }
+
   #createFixedDistributionForm() {
     const form = document.createElement('div');
-    form.className = 'fixed-distribution-form';
+    form.className = 'fixed-distribution-form strategy-detail';
     form.style.display = 'none';
 
     form.appendChild(this.#createErrorMessage());
@@ -127,71 +191,25 @@ export class AllocationModal {
       const label = document.createElement('label');
       label.textContent = timer.title;
 
-      const hoursInput = document.createElement('input');
-      hoursInput.type = 'number';
-      hoursInput.className = 'hours-input';
-      hoursInput.min = '0';
-      hoursInput.value = '0';
-      hoursInput.dataset.timerId = timer.id;
+      const hoursInput = this.#createNumberInput('hours-input', timer, 'hours');
+      const minutesInput = this.#createNumberInput('minutes-input', timer, 'minutes', 59);
 
-      const hourIncBtn = document.createElement('button');
-      hourIncBtn.type = 'button';
-      hourIncBtn.className = 'btn-hour-inc';
-      hourIncBtn.textContent = '+ 1h';
-      hourIncBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        hoursInput.value = String(Number(hoursInput.value) + 1);
-        hoursInput.dispatchEvent(new Event('input'));
-      });
+      const bump = (input, delta, max = Infinity) => {
+        input.value = String(Math.min(max, Math.max(0, Number(input.value) + delta)));
+        input.dispatchEvent(new Event('input'));
+      };
 
-      const hourDecBtn = document.createElement('button');
-      hourDecBtn.type = 'button';
-      hourDecBtn.className = 'btn-hour-dec';
-      hourDecBtn.textContent = '- 1h';
-      hourDecBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        hoursInput.value = String(Math.max(0, Number(hoursInput.value) - 1));
-        hoursInput.dispatchEvent(new Event('input'));
-      });
-
-      const minutesInput = document.createElement('input');
-      minutesInput.type = 'number';
-      minutesInput.className = 'minutes-input';
-      minutesInput.min = '0';
-      minutesInput.max = '59';
-      minutesInput.value = '0';
-      minutesInput.dataset.timerId = timer.id;
-
-      const minIncBtn = document.createElement('button');
-      minIncBtn.type = 'button';
-      minIncBtn.className = 'btn-min-inc';
-      minIncBtn.textContent = '+ 1m';
-      minIncBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        minutesInput.value = String(Math.min(59, Number(minutesInput.value) + 1));
-        minutesInput.dispatchEvent(new Event('input'));
-      });
-
-      const minDecBtn = document.createElement('button');
-      minDecBtn.type = 'button';
-      minDecBtn.className = 'btn-min-dec';
-      minDecBtn.textContent = '- 1m';
-      minDecBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        minutesInput.value = String(Math.max(0, Number(minutesInput.value) - 1));
-        minutesInput.dispatchEvent(new Event('input'));
-      });
+      const hourDecBtn = this.#createStepButton('btn-hour-dec', '- 1h', `Remove one hour from ${timer.title}`, () => bump(hoursInput, -1));
+      const hourIncBtn = this.#createStepButton('btn-hour-inc', '+ 1h', `Add one hour to ${timer.title}`, () => bump(hoursInput, 1));
+      const minDecBtn = this.#createStepButton('btn-min-dec', '- 1m', `Remove one minute from ${timer.title}`, () => bump(minutesInput, -1, 59));
+      const minIncBtn = this.#createStepButton('btn-min-inc', '+ 1m', `Add one minute to ${timer.title}`, () => bump(minutesInput, 1, 59));
 
       hoursInput.addEventListener('input', () => this.#updateFixedRemaining());
       minutesInput.addEventListener('input', () => this.#updateFixedRemaining());
 
       row.appendChild(label);
-      row.appendChild(hourDecBtn);
-      row.appendChild(hoursInput);
-      row.appendChild(hourIncBtn);
-      row.appendChild(minDecBtn);
-      row.appendChild(minutesInput);
-      row.appendChild(minIncBtn);
+      row.appendChild(this.#createStepper([hourDecBtn, hoursInput, hourIncBtn]));
+      row.appendChild(this.#createStepper([minDecBtn, minutesInput, minIncBtn]));
 
       form.appendChild(row);
     });
@@ -203,17 +221,19 @@ export class AllocationModal {
     remainingDisplay.className = 'remaining-time';
     remainingDisplay.textContent = `Remaining: ${this.#formatTime(this.idleMs)}`;
 
-    const remainderLabel = document.createElement('label');
-    remainderLabel.textContent = 'Remainder goes to:';
-
     const remainderSelect = document.createElement('select');
     remainderSelect.className = 'remainder-timer-select';
+    remainderSelect.id = 'remainder-timer-select';
     this.timers.forEach(timer => {
       const option = document.createElement('option');
       option.value = timer.id;
       option.textContent = timer.title;
       remainderSelect.appendChild(option);
     });
+
+    const remainderLabel = document.createElement('label');
+    remainderLabel.textContent = 'Remainder goes to';
+    remainderLabel.htmlFor = remainderSelect.id;
 
     remainingContainer.appendChild(remainingDisplay);
     remainingContainer.appendChild(remainderLabel);
@@ -225,7 +245,7 @@ export class AllocationModal {
 
   #createPercentageDistributionForm() {
     const form = document.createElement('div');
-    form.className = 'percentage-distribution-form';
+    form.className = 'percentage-distribution-form strategy-detail';
     form.style.display = 'none';
 
     form.appendChild(this.#createErrorMessage());
@@ -237,41 +257,23 @@ export class AllocationModal {
       const label = document.createElement('label');
       label.textContent = timer.title;
 
-      const decBtn = document.createElement('button');
-      decBtn.type = 'button';
-      decBtn.className = 'btn-percent-dec';
-      decBtn.textContent = '- 10%';
-      decBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        input.value = String(Math.max(0, Number(input.value) - 10));
-        input.dispatchEvent(new Event('input'));
-      });
-
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.className = 'percentage-input';
-      input.min = '0';
-      input.max = '100';
-      input.value = '0';
-      input.dataset.timerId = timer.id;
-
+      const input = this.#createNumberInput('percentage-input', timer, 'percent', 100);
       input.addEventListener('input', () => this.#updatePercentageValidation());
 
-      const incBtn = document.createElement('button');
-      incBtn.type = 'button';
-      incBtn.className = 'btn-percent-inc';
-      incBtn.textContent = '+ 10%';
-      incBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        input.value = String(Math.min(100, Number(input.value) + 10));
+      const bump = (delta) => {
+        input.value = String(Math.min(100, Math.max(0, Number(input.value) + delta)));
         input.dispatchEvent(new Event('input'));
-      });
+      };
+
+      const decBtn = this.#createStepButton('btn-percent-dec', '- 10%', `Remove ten percent from ${timer.title}`, () => bump(-10));
+      const incBtn = this.#createStepButton('btn-percent-inc', '+ 10%', `Add ten percent to ${timer.title}`, () => bump(10));
+
+      const unit = document.createElement('span');
+      unit.className = 'stepper-unit';
+      unit.textContent = '%';
 
       row.appendChild(label);
-      row.appendChild(decBtn);
-      row.appendChild(input);
-      row.appendChild(document.createElement('span')).textContent = '%';
-      row.appendChild(incBtn);
+      row.appendChild(this.#createStepper([decBtn, input, unit, incBtn]));
 
       form.appendChild(row);
     });
@@ -283,7 +285,15 @@ export class AllocationModal {
     totalDisplay.className = 'percentage-total';
     totalDisplay.textContent = 'Total: 0%';
 
+    const meter = document.createElement('div');
+    meter.className = 'percentage-meter';
+    meter.setAttribute('aria-hidden', 'true');
+    const meterFill = document.createElement('div');
+    meterFill.className = 'percentage-meter-fill';
+    meter.appendChild(meterFill);
+
     totalContainer.appendChild(totalDisplay);
+    totalContainer.appendChild(meter);
     form.appendChild(totalContainer);
 
     return form;
@@ -295,24 +305,18 @@ export class AllocationModal {
 
     const fixedForm = this.modalElement.querySelector('.fixed-distribution-form');
     const percentageForm = this.modalElement.querySelector('.percentage-distribution-form');
-    const timerDropdown = this.modalElement.querySelector('.timer-select');
+    const timerDetail = this.modalElement.querySelector('.timer-select-detail');
 
     fixedForm.style.display = strategy === 'fixed-distribution' ? 'block' : 'none';
     percentageForm.style.display = strategy === 'percentage-distribution' ? 'block' : 'none';
+    timerDetail.style.display = strategy === 'selected-timer' ? 'block' : 'none';
 
-    if (timerDropdown) {
-      timerDropdown.style.display = strategy === 'selected-timer' ? '' : 'none';
+    // Only the percentage strategy has a state where Apply can never succeed
+    if (strategy === 'percentage-distribution') {
+      this.#updatePercentageValidation();
+    } else {
+      this.modalElement.querySelector('.btn-apply').disabled = false;
     }
-
-    this.#updateApplyState();
-  }
-
-  // Only the percentage strategy has a state where Apply can never succeed
-  #updateApplyState(percentageTotal = null) {
-    const strategy = this.modalElement.querySelector('input[name="strategy"]:checked').value;
-    const applyButton = this.modalElement.querySelector('.btn-apply');
-    applyButton.disabled = strategy === 'percentage-distribution'
-      && (percentageTotal ?? this.#sumPercentageInputs()) !== 100;
   }
 
   #updateFixedRemaining() {
@@ -326,19 +330,25 @@ export class AllocationModal {
   }
 
   #updatePercentageValidation() {
+    const form = this.modalElement.querySelector('.percentage-distribution-form');
     const total = this.#sumPercentageInputs();
 
-    const totalDisplay = this.modalElement.querySelector('.percentage-distribution-form .percentage-total');
+    const totalDisplay = form.querySelector('.percentage-total');
     if (totalDisplay) {
       totalDisplay.textContent = `Total: ${total}%`;
       totalDisplay.className = total === 100 ? 'percentage-total valid' : 'percentage-total invalid';
+    }
+
+    const meterFill = form.querySelector('.percentage-meter-fill');
+    if (meterFill) {
+      meterFill.style.setProperty('--pct', `${Math.min(100, total)}%`);
     }
 
     if (total === 100) {
       this.#showError('.percentage-distribution-form', null);
     }
 
-    this.#updateApplyState(total);
+    this.modalElement.querySelector('.btn-apply').disabled = total !== 100;
   }
 
   #getSelectedStrategy() {
@@ -369,7 +379,7 @@ export class AllocationModal {
     if (allocatedMs > this.idleMs) {
       this.#showError(
         '.fixed-distribution-form',
-        `Error: Allocated time exceeds available idle time by ${this.#formatTime(allocatedMs - this.idleMs)}`
+        `Allocated time exceeds the idle time by ${this.#formatTime(allocatedMs - this.idleMs)}`
       );
       return false;
     }
@@ -382,7 +392,7 @@ export class AllocationModal {
     const total = this.#sumPercentageInputs();
 
     if (total !== 100) {
-      this.#showError('.percentage-distribution-form', `Error: Percentages must total 100% (currently ${total}%)`);
+      this.#showError('.percentage-distribution-form', `Percentages must total 100% (currently ${total}%)`);
       return false;
     }
 
@@ -443,13 +453,42 @@ export class AllocationModal {
         if (this.modalElement) {
           const idleTimeDisplay = this.modalElement.querySelector('.idle-time-display');
           if (idleTimeDisplay) {
-            idleTimeDisplay.textContent = `Idle time: ${this.#formatTime(this.idleMs)}`;
+            idleTimeDisplay.textContent = this.#formatTime(this.idleMs);
           }
 
           this.#updateFixedRemaining();
         }
       }
     }, 500);
+  }
+
+  #createHeader() {
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'modal-eyebrow';
+    eyebrow.textContent = 'Welcome back';
+
+    const title = document.createElement('h2');
+    title.className = 'modal-title';
+    title.id = 'allocation-modal-title';
+    title.textContent = 'Allocate Idle Time';
+
+    const lead = document.createElement('p');
+    lead.className = 'modal-lead';
+    lead.id = 'allocation-modal-lead';
+
+    const idleTimeDisplay = document.createElement('span');
+    idleTimeDisplay.className = 'idle-time-display';
+    idleTimeDisplay.textContent = this.#formatTime(this.idleMs);
+
+    lead.append('You were away for ', idleTimeDisplay, '. Where should that time go?');
+
+    header.appendChild(eyebrow);
+    header.appendChild(title);
+    header.appendChild(lead);
+    return header;
   }
 
   show() {
@@ -463,62 +502,42 @@ export class AllocationModal {
 
       const dialog = document.createElement('div');
       dialog.className = 'modal-dialog';
-
-      const title = document.createElement('h2');
-      title.className = 'modal-title';
-      title.textContent = 'Allocate Idle Time';
-
-      const idleTimeDisplay = document.createElement('p');
-      idleTimeDisplay.className = 'idle-time-display';
-      idleTimeDisplay.textContent = `Idle time: ${this.#formatTime(this.idleMs)}`;
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-labelledby', 'allocation-modal-title');
+      dialog.setAttribute('aria-describedby', 'allocation-modal-lead');
 
       const strategiesForm = document.createElement('form');
       strategiesForm.className = 'strategies-form';
+      strategiesForm.addEventListener('submit', (e) => e.preventDefault());
 
-      const strategy1 = this.#createStrategyOption(
-        'previous-timer',
-        'Add all to previously-active timer',
-        !this.previousRunningId
-      );
+      const previousOption = this.#createStrategyOption('previous-timer', !this.previousRunningId);
 
-      const strategy2 = this.#createStrategyOption(
-        'selected-timer',
-        'Add all to selected timer:'
-      );
-      const timerDropdown = this.#createTimerDropdown();
-      strategy2.appendChild(timerDropdown);
+      const selectedOption = this.#createStrategyOption('selected-timer');
+      const timerDetail = document.createElement('div');
+      timerDetail.className = 'strategy-detail timer-select-detail';
+      timerDetail.appendChild(this.#createTimerDropdown());
+      selectedOption.appendChild(timerDetail);
 
-      const strategy3 = this.#createStrategyOption(
-        'fixed-distribution',
-        'Fixed time distribution'
-      );
+      const fixedOption = this.#createStrategyOption('fixed-distribution');
+      fixedOption.appendChild(this.#createFixedDistributionForm());
 
-      const strategy4 = this.#createStrategyOption(
-        'percentage-distribution',
-        'Percentage distribution'
-      );
+      const percentageOption = this.#createStrategyOption('percentage-distribution');
+      percentageOption.appendChild(this.#createPercentageDistributionForm());
 
-      const strategy5 = this.#createStrategyOption(
-        'discard',
-        'Discard idle time (no allocation)'
-      );
+      const discardOption = this.#createStrategyOption('discard');
 
-      strategiesForm.appendChild(strategy1);
-      strategiesForm.appendChild(strategy2);
-      strategiesForm.appendChild(strategy3);
-      strategiesForm.appendChild(strategy4);
-      strategiesForm.appendChild(strategy5);
-
-      const fixedForm = this.#createFixedDistributionForm();
-      strategiesForm.appendChild(fixedForm);
-
-      const percentageForm = this.#createPercentageDistributionForm();
-      strategiesForm.appendChild(percentageForm);
+      strategiesForm.appendChild(previousOption);
+      strategiesForm.appendChild(selectedOption);
+      strategiesForm.appendChild(fixedOption);
+      strategiesForm.appendChild(percentageOption);
+      strategiesForm.appendChild(discardOption);
 
       const closeButton = document.createElement('button');
       closeButton.className = 'btn-close';
       closeButton.type = 'button';
       closeButton.textContent = '×';
+      closeButton.setAttribute('aria-label', 'Close and discard idle time');
       closeButton.addEventListener('click', () => this.#handleCancel());
 
       const buttonContainer = document.createElement('div');
@@ -540,8 +559,7 @@ export class AllocationModal {
       buttonContainer.appendChild(applyButton);
 
       dialog.appendChild(closeButton);
-      dialog.appendChild(title);
-      dialog.appendChild(idleTimeDisplay);
+      dialog.appendChild(this.#createHeader());
       dialog.appendChild(strategiesForm);
       dialog.appendChild(buttonContainer);
       this.modalElement.appendChild(dialog);
