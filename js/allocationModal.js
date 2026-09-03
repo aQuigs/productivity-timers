@@ -1,4 +1,5 @@
 import { formatDuration } from './formatDuration.js';
+import IdleDetector from './idleDetector.js';
 
 const STRATEGY_COPY = {
   'previous-timer': {
@@ -33,8 +34,8 @@ export class AllocationModal {
     this.updateInterval = null;
   }
 
-  #formatTime(ms) {
-    return formatDuration(ms);
+  #selectedStrategy() {
+    return this.modalElement.querySelector('input[name="strategy"]:checked').value;
   }
 
   #hhmmToMs(hours, minutes) {
@@ -219,7 +220,7 @@ export class AllocationModal {
 
     const remainingDisplay = document.createElement('p');
     remainingDisplay.className = 'remaining-time';
-    remainingDisplay.textContent = `Remaining: ${this.#formatTime(this.idleMs)}`;
+    remainingDisplay.textContent = `Remaining: ${formatDuration(this.idleMs)}`;
 
     const remainderSelect = document.createElement('select');
     remainderSelect.className = 'remainder-timer-select';
@@ -300,8 +301,7 @@ export class AllocationModal {
   }
 
   #updateStrategyForms() {
-    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
-    const strategy = selectedRadio.value;
+    const strategy = this.#selectedStrategy();
 
     const fixedForm = this.modalElement.querySelector('.fixed-distribution-form');
     const percentageForm = this.modalElement.querySelector('.percentage-distribution-form');
@@ -325,7 +325,7 @@ export class AllocationModal {
     const remainingMs = Math.max(0, this.idleMs - this.#sumFixedInputs());
     const remainingDisplay = this.modalElement.querySelector('.fixed-distribution-form .remaining-time');
     if (remainingDisplay) {
-      remainingDisplay.textContent = `Remaining: ${this.#formatTime(remainingMs)}`;
+      remainingDisplay.textContent = `Remaining: ${formatDuration(remainingMs)}`;
     }
   }
 
@@ -352,8 +352,7 @@ export class AllocationModal {
   }
 
   #getSelectedStrategy() {
-    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
-    const strategy = selectedRadio.value;
+    const strategy = this.#selectedStrategy();
     const config = {};
 
     if (strategy === 'previous-timer') {
@@ -379,7 +378,7 @@ export class AllocationModal {
     if (allocatedMs > this.idleMs) {
       this.#showError(
         '.fixed-distribution-form',
-        `Allocated time exceeds the idle time by ${this.#formatTime(allocatedMs - this.idleMs)}`
+        `Allocated time exceeds the idle time by ${formatDuration(allocatedMs - this.idleMs)}`
       );
       return false;
     }
@@ -401,8 +400,7 @@ export class AllocationModal {
   }
 
   #handleApply() {
-    const selectedRadio = this.modalElement.querySelector('input[name="strategy"]:checked');
-    const strategy = selectedRadio.value;
+    const strategy = this.#selectedStrategy();
 
     if (strategy === 'fixed-distribution' && !this.#validateFixedAllocation()) {
       return;
@@ -445,7 +443,7 @@ export class AllocationModal {
 
   #startDynamicUpdate() {
     this.updateInterval = setInterval(() => {
-      const accumulatedIdleMs = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
+      const accumulatedIdleMs = IdleDetector.readAccumulatedIdleMs();
 
       if (accumulatedIdleMs > 0 && accumulatedIdleMs !== this.idleMs) {
         this.idleMs = accumulatedIdleMs;
@@ -453,7 +451,7 @@ export class AllocationModal {
         if (this.modalElement) {
           const idleTimeDisplay = this.modalElement.querySelector('.idle-time-display');
           if (idleTimeDisplay) {
-            idleTimeDisplay.textContent = this.#formatTime(this.idleMs);
+            idleTimeDisplay.textContent = formatDuration(this.idleMs);
           }
 
           this.#updateFixedRemaining();
@@ -481,7 +479,7 @@ export class AllocationModal {
 
     const idleTimeDisplay = document.createElement('span');
     idleTimeDisplay.className = 'idle-time-display';
-    idleTimeDisplay.textContent = this.#formatTime(this.idleMs);
+    idleTimeDisplay.textContent = formatDuration(this.idleMs);
 
     lead.append('You were away for ', idleTimeDisplay, '. Where should that time go?');
 

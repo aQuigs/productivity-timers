@@ -1,6 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import IdleDetector from '../js/idleDetector.js';
-import { setHidden, restoreHidden, dispatchVisibilityChange } from './helpers.js';
+import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo } from './helpers.js';
 
 describe('IdleDetector', () => {
   let detector;
@@ -213,7 +213,7 @@ describe('IdleDetector', () => {
       dispatchVisibilityChange();
 
       // Simulate 15 seconds passing with the tab hidden
-      localStorage.setItem('last_heartbeat', String(Date.now() - 15000));
+      heartbeatAgo(15000);
 
       setHidden(false);
       dispatchVisibilityChange();
@@ -264,7 +264,7 @@ describe('IdleDetector', () => {
 
       setHidden(true);
       dispatchVisibilityChange();
-      localStorage.setItem('last_heartbeat', String(Date.now() - 5000));
+      heartbeatAgo(5000);
       setHidden(false);
       dispatchVisibilityChange();
 
@@ -288,7 +288,7 @@ describe('IdleDetector', () => {
       detector = new IdleDetector({ callback: () => { calls++; }, idleThreshold: 10000 });
       detector.destroy();
 
-      localStorage.setItem('last_heartbeat', String(Date.now() - 15000));
+      heartbeatAgo(15000);
       setHidden(false);
       dispatchVisibilityChange();
 
@@ -298,7 +298,7 @@ describe('IdleDetector', () => {
     it('should return the accumulated idle total from checkIdle()', () => {
       detector = new IdleDetector({ idleThreshold: 10000 });
 
-      localStorage.setItem('last_heartbeat', String(Date.now() - 5000));
+      heartbeatAgo(5000);
       const total = detector.checkIdle();
 
       expect(total).to.be.at.least(5000);

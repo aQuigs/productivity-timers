@@ -1,4 +1,7 @@
 export const DEFAULT_IDLE_THRESHOLD_MS = 10000;
+export const ACCUMULATED_IDLE_KEY = 'accumulated_idle_ms';
+
+const LAST_HEARTBEAT_KEY = 'last_heartbeat';
 
 const noop = () => {};
 
@@ -24,6 +27,14 @@ class IdleDetector {
     this.heartbeatTimer = null;
     this.boundHandleVisibilityChange = () => this.handleVisibilityChange();
     this.init();
+  }
+
+  /**
+   * Idle milliseconds accumulated so far and not yet allocated or discarded
+   * @returns {number}
+   */
+  static readAccumulatedIdleMs() {
+    return parseInt(localStorage.getItem(ACCUMULATED_IDLE_KEY) || '0', 10);
   }
 
   init() {
@@ -56,8 +67,8 @@ class IdleDetector {
    * @returns {number} Accumulated idle milliseconds not yet allocated
    */
   checkIdle() {
-    const lastHeartbeat = parseInt(localStorage.getItem('last_heartbeat') || '0', 10);
-    const accumulated = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
+    const lastHeartbeat = parseInt(localStorage.getItem(LAST_HEARTBEAT_KEY) || '0', 10);
+    const accumulated = IdleDetector.readAccumulatedIdleMs();
 
     if (lastHeartbeat === 0) {
       this.updateHeartbeat();
@@ -74,7 +85,7 @@ class IdleDetector {
     }
 
     const total = accumulated + idle;
-    localStorage.setItem('accumulated_idle_ms', total.toString());
+    localStorage.setItem(ACCUMULATED_IDLE_KEY, total.toString());
 
     // Update heartbeat NOW so we don't double-count this period
     this.updateHeartbeat();
@@ -87,7 +98,7 @@ class IdleDetector {
   }
 
   updateHeartbeat() {
-    localStorage.setItem('last_heartbeat', Date.now().toString());
+    localStorage.setItem(LAST_HEARTBEAT_KEY, Date.now().toString());
   }
 
   startHeartbeat() {
@@ -105,7 +116,7 @@ class IdleDetector {
   }
 
   clearAccumulatedIdle() {
-    localStorage.removeItem('accumulated_idle_ms');
+    localStorage.removeItem(ACCUMULATED_IDLE_KEY);
     this.updateHeartbeat();
   }
 

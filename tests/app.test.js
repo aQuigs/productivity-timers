@@ -1,7 +1,7 @@
 import { expect } from '@esm-bundle/chai';
 import { App } from '../js/app.js';
 import { TimerManager } from '../js/timerManager.js';
-import { setHidden, restoreHidden, dispatchVisibilityChange } from './helpers.js';
+import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo } from './helpers.js';
 
 describe('App', () => {
   let container;
@@ -9,10 +9,6 @@ describe('App', () => {
 
   function tick(ms = 20) {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  function heartbeatAgo(ms) {
-    localStorage.setItem('last_heartbeat', String(Date.now() - ms));
   }
 
   function seedRunningTimer() {
