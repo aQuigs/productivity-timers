@@ -48,7 +48,8 @@ class App {
 
     if (accumulatedIdleMs) {
       const idleMs = parseInt(accumulatedIdleMs, 10);
-      if (idleMs > 10000) {
+      if (idleMs > 0) {
+        // handleIdleReturn will resume if <= 10000, or show modal if > 10000
         this.handleIdleReturn(idleMs, pendingPreviousTimer);
       }
     }
@@ -340,6 +341,9 @@ class App {
     this.hiddenRunningTimers.clear();
     // Clear from localStorage
     localStorage.removeItem('app_hidden_running_timers');
+    localStorage.removeItem('pending_idle_previous_timer');
+    // Clear accumulated idle
+    this.idleDetector.clearAccumulatedIdle();
     this.updateAllTimerDisplays();
   }
 

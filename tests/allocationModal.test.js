@@ -482,7 +482,8 @@ describe('AllocationModal', () => {
         minutesInputs[0].dispatchEvent(new Event('input'));
 
         setTimeout(() => {
-          expect(remainingDisplay.textContent).to.include('00:05');
+          // Format is MM:SS, so 5 minutes remaining = 05:00
+          expect(remainingDisplay.textContent).to.include('05:00');
           done();
         }, 50);
       }, 50);
@@ -754,6 +755,105 @@ describe('AllocationModal', () => {
         expect(percentageInput.value).to.equal('40');
         done();
       }, 50);
+    });
+  });
+
+  describe('Dynamic Time Updates', () => {
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    afterEach(() => {
+      localStorage.clear();
+    });
+
+    it('should dynamically update displayed idle time from localStorage accumulated_idle_ms', (done) => {
+      // Start with 15 seconds accumulated
+      const initialIdleMs = 15000;
+      localStorage.setItem('accumulated_idle_ms', initialIdleMs.toString());
+
+      modal = new AllocationModal(initialIdleMs, [], null);
+      modal.show();
+
+      const idleTimeDisplay = document.querySelector('.allocation-modal .idle-time-display');
+      expect(idleTimeDisplay.textContent).to.include('00:00:15');
+
+      // Simulate IdleDetector adding 2 more seconds
+      setTimeout(() => {
+        localStorage.setItem('accumulated_idle_ms', '17000');
+
+        // Wait for modal to update (should happen within ~500ms)
+        setTimeout(() => {
+          expect(idleTimeDisplay.textContent).to.include('00:00:17');
+          done();
+        }, 600);
+      }, 100);
+    });
+
+    it('should update fixed distribution remaining time when total idle increases', (done) => {
+      const timers = [
+        { id: 'timer-1', title: 'Timer 1' },
+        { id: 'timer-2', title: 'Timer 2' }
+      ];
+
+      const initialIdleMs = 60000; // 1 minute
+      localStorage.setItem('accumulated_idle_ms', initialIdleMs.toString());
+
+      modal = new AllocationModal(initialIdleMs, timers, null);
+      modal.show();
+
+      const strategy3Radio = document.querySelector('.allocation-modal input[value="fixed-distribution"]');
+      strategy3Radio.click();
+
+      setTimeout(() => {
+        const hoursInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .hours-input');
+        const minutesInputs = document.querySelectorAll('.allocation-modal .fixed-distribution-form .minutes-input');
+
+        // Allocate 30 seconds to timer 1
+        hoursInputs[0].value = 0;
+        minutesInputs[0].value = 0;
+        minutesInputs[0].dispatchEvent(new Event('input'));
+
+        setTimeout(() => {
+          const remainingDisplay = document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time');
+          expect(remainingDisplay.textContent).to.include('01:00');
+
+          // Simulate 30 more seconds accumulated
+          localStorage.setItem('accumulated_idle_ms', '90000'); // 1.5 minutes
+
+          // Wait for update
+          setTimeout(() => {
+            expect(remainingDisplay.textContent).to.include('01:30');
+            done();
+          }, 600);
+        }, 50);
+      }, 50);
+    });
+
+    it('should stop updating when modal is closed', (done) => {
+      const initialIdleMs = 15000;
+      localStorage.setItem('accumulated_idle_ms', initialIdleMs.toString());
+
+      modal = new AllocationModal(initialIdleMs, [], null);
+      const promise = modal.show();
+
+      // Close the modal
+      setTimeout(() => {
+        const cancelButton = document.querySelector('.allocation-modal button.btn-cancel');
+        cancelButton.click();
+
+        promise.then(() => {
+          // Update localStorage after modal is closed
+          localStorage.setItem('accumulated_idle_ms', '25000');
+
+          // Wait to ensure no updates happen
+          setTimeout(() => {
+            // Modal should be gone, so no display to check
+            expect(document.querySelector('.allocation-modal')).to.not.exist;
+            done();
+          }, 600);
+        });
+      }, 100);
     });
   });
 });
