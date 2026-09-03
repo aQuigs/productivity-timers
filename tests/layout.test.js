@@ -197,4 +197,110 @@ describe('Layout and Overflow Tests', () => {
       expect(mediumMax - mediumMin).to.be.lessThan(5);
     });
   });
+
+  describe('Timer display typography', () => {
+    it('should use tabular numerals so the time does not jitter as digits change', () => {
+      const card = createTestTimerCard('Timer', '00:00:00');
+      document.getElementById('timer-container').appendChild(card);
+
+      const display = card.querySelector('.timer-display');
+      const styles = window.getComputedStyle(display);
+
+      expect(styles.fontVariantNumeric).to.include('tabular-nums');
+    });
+
+    it('should keep the same width for narrow and wide digit strings', () => {
+      const narrow = createTestTimerCard('Timer', '11:11:11');
+      const wide = createTestTimerCard('Timer', '00:00:00');
+      const timerContainer = document.getElementById('timer-container');
+      timerContainer.appendChild(narrow);
+      timerContainer.appendChild(wide);
+
+      const measure = (card) => {
+        const display = card.querySelector('.timer-display');
+        const range = document.createRange();
+        range.selectNodeContents(display);
+        return range.getBoundingClientRect().width;
+      };
+
+      expect(Math.abs(measure(narrow) - measure(wide))).to.be.lessThan(1);
+    });
+  });
+
+  describe('Running state', () => {
+    it('should make the running card visually distinct from an idle card', () => {
+      const idle = createTestTimerCard('Idle');
+      const running = createTestTimerCard('Running');
+      running.classList.add('active');
+      const timerContainer = document.getElementById('timer-container');
+      timerContainer.appendChild(idle);
+      timerContainer.appendChild(running);
+
+      const idleStyles = window.getComputedStyle(idle);
+      const runningStyles = window.getComputedStyle(running);
+
+      expect(runningStyles.borderColor).to.not.equal(idleStyles.borderColor);
+    });
+
+    it('should style start and pause buttons differently', () => {
+      const idle = createTestTimerCard('Idle');
+      const running = createTestTimerCard('Running');
+      running.querySelector('.btn').className = 'btn btn-pause';
+      const timerContainer = document.getElementById('timer-container');
+      timerContainer.appendChild(idle);
+      timerContainer.appendChild(running);
+
+      const startBackground = window.getComputedStyle(idle.querySelector('.btn')).backgroundColor;
+      const pauseBackground = window.getComputedStyle(running.querySelector('.btn')).backgroundColor;
+
+      expect(startBackground).to.not.equal(pauseBackground);
+    });
+  });
+
+  describe('Top bar', () => {
+    function createTopBar() {
+      const header = document.createElement('header');
+      header.className = 'topbar';
+      header.innerHTML = `
+        <div class="brand">
+          <h1>Productivity Timers</h1>
+          <p class="subtitle">One clock runs at a time</p>
+        </div>
+        <div class="summary">
+          <span class="summary-label">Total</span>
+          <span id="total-time" class="summary-value">00:00:00</span>
+        </div>
+        <div class="controls">
+          <button id="reset-all-btn" class="btn btn-secondary">Reset all</button>
+          <button id="add-timer-btn" class="btn btn-primary">Add timer</button>
+        </div>
+      `;
+      return header;
+    }
+
+    it('should not overflow horizontally on a phone-width layout', () => {
+      const appContainer = document.querySelector('.app-container');
+      appContainer.style.width = '320px';
+      const topBar = createTopBar();
+      appContainer.prepend(topBar);
+
+      const containerRect = appContainer.getBoundingClientRect();
+      topBar.querySelectorAll('.btn, .summary, .brand').forEach(el => {
+        const rect = el.getBoundingClientRect();
+        expect(rect.right).to.be.at.most(containerRect.right + 1,
+          `${el.className} should stay inside the container`);
+        expect(rect.left).to.be.at.least(containerRect.left - 1,
+          `${el.className} should stay inside the container`);
+      });
+    });
+
+    it('should show the total using tabular numerals', () => {
+      const appContainer = document.querySelector('.app-container');
+      const topBar = createTopBar();
+      appContainer.prepend(topBar);
+
+      const styles = window.getComputedStyle(topBar.querySelector('#total-time'));
+      expect(styles.fontVariantNumeric).to.include('tabular-nums');
+    });
+  });
 });

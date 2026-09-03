@@ -856,4 +856,75 @@ describe('AllocationModal', () => {
       }, 100);
     });
   });
+
+  describe('Strategy detail visibility', () => {
+    const isVisible = (el) => el.getClientRects().length > 0;
+    const choose = (value) => {
+      const radio = document.querySelector(`.allocation-modal input[value="${value}"]`);
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change'));
+    };
+    const timers = [
+      { id: 'timer-1', title: 'Timer 1' },
+      { id: 'timer-2', title: 'Timer 2' }
+    ];
+
+    it('should keep every strategy option visible after switching strategies', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+
+      choose('fixed-distribution');
+      choose('percentage-distribution');
+
+      const radios = document.querySelectorAll('.allocation-modal input[name="strategy"]');
+      expect(radios).to.have.lengthOf(5);
+      radios.forEach(radio => {
+        expect(isVisible(radio), `${radio.value} option should stay visible`).to.be.true;
+      });
+    });
+
+    it('should only show the timer dropdown while selected-timer is chosen', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+      const dropdown = document.querySelector('.allocation-modal select.timer-select');
+
+      expect(isVisible(dropdown), 'hidden while the default strategy is active').to.be.false;
+
+      choose('selected-timer');
+      expect(isVisible(dropdown), 'shown once selected-timer is chosen').to.be.true;
+
+      choose('discard');
+      expect(isVisible(dropdown), 'hidden again after switching away').to.be.false;
+    });
+
+    it('should only show the fixed and percentage forms for their own strategy', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+      const fixedForm = document.querySelector('.allocation-modal .fixed-distribution-form');
+      const percentageForm = document.querySelector('.allocation-modal .percentage-distribution-form');
+
+      expect(isVisible(fixedForm)).to.be.false;
+      expect(isVisible(percentageForm)).to.be.false;
+
+      choose('fixed-distribution');
+      expect(isVisible(fixedForm)).to.be.true;
+      expect(isVisible(percentageForm)).to.be.false;
+
+      choose('percentage-distribution');
+      expect(isVisible(fixedForm)).to.be.false;
+      expect(isVisible(percentageForm)).to.be.true;
+    });
+
+    it('should expose the dialog to assistive tech with a labelled dialog role', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+
+      const dialog = document.querySelector('.allocation-modal .modal-dialog');
+      const title = document.querySelector('.allocation-modal .modal-title');
+      expect(dialog.getAttribute('role')).to.equal('dialog');
+      expect(dialog.getAttribute('aria-modal')).to.equal('true');
+      expect(title.id).to.be.a('string').and.not.empty;
+      expect(dialog.getAttribute('aria-labelledby')).to.equal(title.id);
+    });
+  });
 });
