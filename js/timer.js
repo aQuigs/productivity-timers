@@ -1,3 +1,5 @@
+import { formatDuration } from './formatDuration.js';
+
 /**
  * Timer class - Manages individual timer state and time tracking
  * Uses performance.now() for high-resolution, monotonic timing
@@ -136,16 +138,7 @@ export class Timer {
    * Hours can exceed 99 (e.g., "125:30:45")
    */
   getFormattedTime() {
-    const totalSeconds = Math.floor(this.getElapsedMs() / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    const hh = String(hours).padStart(2, '0');
-    const mm = String(minutes).padStart(2, '0');
-    const ss = String(seconds).padStart(2, '0');
-
-    return `${hh}:${mm}:${ss}`;
+    return formatDuration(this.getElapsedMs());
   }
 
   /**

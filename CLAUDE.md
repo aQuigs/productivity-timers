@@ -16,26 +16,35 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - Editable timer titles
 - Page visibility handling: pauses running timers when tab becomes hidden
 - localStorage persistence: timer state persists across page reloads
-- Dark theme UI with responsive design
+- Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
+- Header shows the running total across all timers
 
 ## Project Structure
 
 ```
 timers/
-├── index.html                 # Main HTML entry point
-├── css/styles.css            # Styling (dark theme)
+├── index.html                 # Main HTML entry point (top bar, timer grid)
+├── css/styles.css            # Styling: design tokens, dark + light (prefers-color-scheme)
 ├── js/
 │   ├── app.js               # App: DOM rendering, event binding, RAF update loop
 │   ├── timer.js             # Timer: individual timer state (private fields)
 │   ├── timerManager.js      # TimerManager: orchestrates timers, enforces chess-clock
-│   └── storageService.js    # StorageService: localStorage persistence + validation
+│   ├── storageService.js    # StorageService: localStorage persistence + validation
+│   ├── idleDetector.js      # IdleDetector: heartbeat-based away-time tracking
+│   ├── allocationModal.js   # AllocationModal: "where should idle time go" dialog
+│   ├── timeDistributor.js   # Pure allocation strategies (single/fixed/percentage)
+│   └── formatDuration.js    # Shared HH:MM:SS formatter used by Timer, modal, header
 ├── tests/                    # Web Test Runner test suite (Mocha/Chai)
 │   ├── timer.test.js
 │   ├── timerManager.test.js
 │   ├── storageService.test.js
-│   ├── integration.test.js   # Currently a placeholder
-│   ├── layout.test.js
-│   ├── closeButton.test.js
+│   ├── idleDetector.test.js
+│   ├── allocationModal.test.js
+│   ├── timeDistributor.test.js
+│   ├── formatDuration.test.js
+│   ├── integration.test.js
+│   ├── layout.test.js        # CSS contracts: grid widths, tabular digits, top bar overflow
+│   ├── closeButton.test.js   # Remove button must stay 36px square with red tint
 │   └── closeButtonReal.test.js
 ├── web-test-runner.config.js # Test runner configuration
 └── package.json              # Dependencies: @web/test-runner, Playwright
@@ -92,7 +101,8 @@ When a user starts timer B while timer A is running:
 - Individual timer operations: `resetTimer(id)`, `updateTimerTitle(id, newTitle)` - all trigger persistence
 - On page load, TimerManager attempts to restore timers from localStorage
 - Running timers are converted to paused on restore (can't restore `performance.now()` baseline)
-- **Note**: `App.handleResetAll()` currently calls `timer.reset()` directly on each timer instead of delegating to `TimerManager.resetAll()`. This works but violates separation of concerns; should be refactored for consistency.
+- `App.handleResetAll()` delegates to `TimerManager.resetAll()` so the reset is persisted like every other state change
+- The RAF loop only touches the DOM when a timer's formatted time or state changes (`lastDisplayedValues` / `lastDisplayedStates`); `applyTimerState()` is the single place that syncs button, `.active` class and status label
 
 ## Commands
 
