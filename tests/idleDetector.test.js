@@ -1,5 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import IdleDetector from '../js/idleDetector.js';
+import { setHidden, restoreHidden, dispatchVisibilityChange } from './helpers.js';
 
 describe('IdleDetector', () => {
   let detector;
@@ -177,19 +178,8 @@ describe('IdleDetector', () => {
   });
 
   describe('Heartbeat and Visibility', () => {
-    function setHidden(hidden) {
-      Object.defineProperty(document, 'hidden', {
-        configurable: true,
-        get() { return hidden; }
-      });
-    }
-
-    function dispatchVisibilityChange() {
-      document.dispatchEvent(new Event('visibilitychange'));
-    }
-
     afterEach(() => {
-      delete document.hidden;
+      restoreHidden();
     });
 
     it('should accept a custom heartbeat interval', () => {
@@ -256,6 +246,41 @@ describe('IdleDetector', () => {
         expect(localStorage.getItem('last_heartbeat')).to.equal(stampedAtInit);
         done();
       }, 100);
+    });
+
+    it('should call onHidden when the document becomes hidden', () => {
+      let calls = 0;
+      detector = new IdleDetector({ onHidden: () => { calls++; } });
+
+      setHidden(true);
+      dispatchVisibilityChange();
+
+      expect(calls).to.equal(1);
+    });
+
+    it('should call onVisible with the accumulated idle total when the document becomes visible', () => {
+      let received = null;
+      detector = new IdleDetector({ onVisible: (total) => { received = total; } });
+
+      setHidden(true);
+      dispatchVisibilityChange();
+      localStorage.setItem('last_heartbeat', String(Date.now() - 5000));
+      setHidden(false);
+      dispatchVisibilityChange();
+
+      expect(received).to.be.at.least(5000);
+    });
+
+    it('should call onVisible with zero when no idle time accumulated', () => {
+      let received = null;
+      detector = new IdleDetector({ onVisible: (total) => { received = total; } });
+
+      setHidden(true);
+      dispatchVisibilityChange();
+      setHidden(false);
+      dispatchVisibilityChange();
+
+      expect(received).to.equal(0);
     });
 
     it('should stop listening for visibility changes after destroy()', () => {

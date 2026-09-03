@@ -13,29 +13,27 @@
  * @throws {RangeError} If time remains and there is no timer to receive it
  */
 function assignRemainder(result, shares, remainder, remainderTimerId) {
-  if (remainder === 0) {
-    if (remainderTimerId && !result.has(remainderTimerId)) {
-      result.set(remainderTimerId, 0);
-    }
-    return;
-  }
+  const target = remainderTimerId || (remainder > 0 ? largestShare(shares) : null);
 
-  let target = remainderTimerId;
-  if (!target) {
-    let largest = -1;
-    for (const [timerId, share] of shares) {
-      if (share > largest) {
-        largest = share;
-        target = timerId;
-      }
-    }
-  }
-
-  if (!target) {
+  if (remainder > 0 && !target) {
     throw new RangeError('No timer to receive remaining time');
   }
 
-  result.set(target, (result.get(target) || 0) + remainder);
+  if (target) {
+    result.set(target, (result.get(target) || 0) + remainder);
+  }
+}
+
+function largestShare(shares) {
+  let target = null;
+  let largest = -Infinity;
+  for (const [timerId, share] of shares) {
+    if (share > largest) {
+      largest = share;
+      target = timerId;
+    }
+  }
+  return target;
 }
 
 /**

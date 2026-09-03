@@ -1,8 +1,24 @@
 export const DEFAULT_IDLE_THRESHOLD_MS = 10000;
 
+const noop = () => {};
+
+/**
+ * IdleDetector - Measures time the page was not being watched (tab hidden, closed,
+ * or the machine asleep) using a heartbeat timestamp in localStorage
+ */
 class IdleDetector {
+  /**
+   * @param {Object} [options]
+   * @param {Function} [options.callback] - Called with the total when it exceeds the threshold
+   * @param {Function} [options.onHidden] - Called when the document becomes hidden
+   * @param {Function} [options.onVisible] - Called with the accumulated total on every return
+   * @param {number} [options.idleThreshold]
+   * @param {number} [options.heartbeatInterval]
+   */
   constructor(options = {}) {
-    this.callback = options.callback || (() => {});
+    this.callback = options.callback || noop;
+    this.onHidden = options.onHidden || noop;
+    this.onVisible = options.onVisible || noop;
     this.idleThreshold = options.idleThreshold || DEFAULT_IDLE_THRESHOLD_MS;
     this.heartbeatInterval = options.heartbeatInterval || 1000;
     this.heartbeatTimer = null;
@@ -27,9 +43,11 @@ class IdleDetector {
       // instead of the time since a background-throttled tick
       this.updateHeartbeat();
       this.stopHeartbeat();
+      this.onHidden();
     } else {
-      this.checkIdle();
+      const total = this.checkIdle();
       this.startHeartbeat();
+      this.onVisible(total);
     }
   }
 

@@ -34,6 +34,7 @@ timers/
 │   ├── timeDistributor.js   # Pure allocation strategies for idle time
 │   └── allocationModal.js   # AllocationModal: idle-time allocation dialog
 ├── tests/                    # Web Test Runner test suite (Mocha/Chai)
+│   ├── helpers.js            # Shared test helpers (visibility simulation)
 │   ├── app.test.js           # App flows: startup, visibility, persistence, rendering
 │   ├── timer.test.js
 │   ├── timerManager.test.js
@@ -85,8 +86,8 @@ timers/
 
 **IdleDetector (idleDetector.js)**
 - Stamps `last_heartbeat` in localStorage every second while the tab is visible
-- On hide: stamps once and stops the heartbeat, so the next check measures the whole hidden period
-- On show/load: folds the gap since the last stamp into `accumulated_idle_ms`; invokes the callback when the total exceeds the threshold (`DEFAULT_IDLE_THRESHOLD_MS`, 10 s)
+- On hide: stamps once, stops the heartbeat (so the next check measures the whole hidden period), and calls `onHidden`
+- On show/load: folds the gap since the last stamp into `accumulated_idle_ms`; on show calls `onVisible(total)`; invokes `callback(total)` when the total exceeds the threshold (`DEFAULT_IDLE_THRESHOLD_MS`, 10 s)
 - `checkIdle()` returns the accumulated total and is safe to call repeatedly
 
 **AllocationModal (allocationModal.js)** / **TimeDistributor (timeDistributor.js)**
@@ -103,10 +104,10 @@ When a user starts timer B while timer A is running:
 4. Only one timer's time advances at a time
 
 **Page Visibility Handling:**
-- When document becomes hidden: running timers are paused, IDs stored in `hiddenRunningTimers` (also mirrored to localStorage, since browsers fire `visibilitychange` → hidden on unload)
-- When document becomes visible again: `App.handleVisibilityChange()` calls `idleDetector.checkIdle()` itself, so it does not depend on listener order. If the accumulated idle is within the threshold, `hiddenRunningTimers` are resumed; otherwise the IdleDetector callback opens the allocation modal and the previous timer resumes after it closes
-- `handleIdleReturn()` is guarded by `allocationInProgress`: only one modal at a time (the open modal picks up further idle time itself)
-- If the app loads in a hidden tab, `init()` applies the hidden handling immediately
+- IdleDetector owns the `visibilitychange` listener and calls App's `onHidden` / `onVisible(total)` hooks; App registers no listener of its own
+- On hidden (`App.handleHidden()`): running timers are paused and their IDs stored in `hiddenRunningTimers`, mirrored to localStorage because browsers fire `visibilitychange` → hidden on unload. While a modal is open the set is only replaced if something was actually running, so it keeps naming the timer to resume
+- On visible and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes. Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
+- If the app loads in a hidden tab, `init()` calls `handleHidden()` instead
 
 **Persistence:**
 - Every state change (start, pause, add, remove, title update, reset) triggers `TimerManager.persist()`

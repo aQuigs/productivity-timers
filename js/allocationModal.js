@@ -30,24 +30,29 @@ export class AllocationModal {
     return Math.max(0, Number(input.value) || 0);
   }
 
-  #sumFixedInputs() {
+  /** @returns {Array<[string, number]>} [timerId, milliseconds] per fixed-distribution row */
+  #readFixedRows() {
     const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
     const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
 
-    let allocatedMs = 0;
-    hoursInputs.forEach((input, idx) => {
-      allocatedMs += this.#hhmmToMs(this.#readNonNegative(input), this.#readNonNegative(minutesInputs[idx]));
-    });
-    return allocatedMs;
+    return Array.from(hoursInputs, (input, idx) => [
+      input.dataset.timerId,
+      this.#hhmmToMs(this.#readNonNegative(input), this.#readNonNegative(minutesInputs[idx]))
+    ]);
+  }
+
+  /** @returns {Array<[string, number]>} [timerId, percentage] per percentage-distribution row */
+  #readPercentageRows() {
+    const inputs = this.modalElement.querySelectorAll('.percentage-distribution-form .percentage-input');
+    return Array.from(inputs, input => [input.dataset.timerId, this.#readNonNegative(input)]);
+  }
+
+  #sumFixedInputs() {
+    return this.#readFixedRows().reduce((sum, [, ms]) => sum + ms, 0);
   }
 
   #sumPercentageInputs() {
-    const inputs = this.modalElement.querySelectorAll('.percentage-distribution-form .percentage-input');
-    let total = 0;
-    inputs.forEach(input => {
-      total += this.#readNonNegative(input);
-    });
-    return total;
+    return this.#readPercentageRows().reduce((sum, [, percentage]) => sum + percentage, 0);
   }
 
   #createErrorMessage() {
@@ -303,10 +308,11 @@ export class AllocationModal {
   }
 
   // Only the percentage strategy has a state where Apply can never succeed
-  #updateApplyState() {
+  #updateApplyState(percentageTotal = null) {
     const strategy = this.modalElement.querySelector('input[name="strategy"]:checked').value;
     const applyButton = this.modalElement.querySelector('.btn-apply');
-    applyButton.disabled = strategy === 'percentage-distribution' && this.#sumPercentageInputs() !== 100;
+    applyButton.disabled = strategy === 'percentage-distribution'
+      && (percentageTotal ?? this.#sumPercentageInputs()) !== 100;
   }
 
   #updateFixedRemaining() {
@@ -332,7 +338,7 @@ export class AllocationModal {
       this.#showError('.percentage-distribution-form', null);
     }
 
-    this.#updateApplyState();
+    this.#updateApplyState(total);
   }
 
   #getSelectedStrategy() {
@@ -346,31 +352,11 @@ export class AllocationModal {
       const dropdown = this.modalElement.querySelector('select.timer-select');
       config.timerId = dropdown.value;
     } else if (strategy === 'fixed-distribution') {
-      config.allocations = new Map();
-      const hoursInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .hours-input');
-      const minutesInputs = this.modalElement.querySelectorAll('.fixed-distribution-form .minutes-input');
-
-      hoursInputs.forEach((input, idx) => {
-        const timerId = input.dataset.timerId;
-        const ms = this.#hhmmToMs(this.#readNonNegative(input), this.#readNonNegative(minutesInputs[idx]));
-        if (ms > 0) {
-          config.allocations.set(timerId, ms);
-        }
-      });
-
+      config.allocations = new Map(this.#readFixedRows().filter(([, ms]) => ms > 0));
       const remainderSelect = this.modalElement.querySelector('.fixed-distribution-form .remainder-timer-select');
       config.remainderTimerId = remainderSelect.value;
     } else if (strategy === 'percentage-distribution') {
-      config.percentages = new Map();
-      const inputs = this.modalElement.querySelectorAll('.percentage-distribution-form .percentage-input');
-
-      inputs.forEach(input => {
-        const timerId = input.dataset.timerId;
-        const percentage = this.#readNonNegative(input);
-        if (percentage > 0) {
-          config.percentages.set(timerId, percentage);
-        }
-      });
+      config.percentages = new Map(this.#readPercentageRows().filter(([, percentage]) => percentage > 0));
     }
 
     // idleMs may have grown since the modal opened (see #startDynamicUpdate)

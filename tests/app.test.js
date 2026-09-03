@@ -1,21 +1,11 @@
 import { expect } from '@esm-bundle/chai';
 import { App } from '../js/app.js';
 import { TimerManager } from '../js/timerManager.js';
+import { setHidden, restoreHidden, dispatchVisibilityChange } from './helpers.js';
 
 describe('App', () => {
   let container;
   let app;
-
-  function setHidden(hidden) {
-    Object.defineProperty(document, 'hidden', {
-      configurable: true,
-      get() { return hidden; }
-    });
-  }
-
-  function dispatchVisibilityChange() {
-    document.dispatchEvent(new Event('visibilitychange'));
-  }
 
   function tick(ms = 20) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -36,6 +26,24 @@ describe('App', () => {
     app = new App();
     app.init();
     return app;
+  }
+
+  function hide() {
+    setHidden(true);
+    dispatchVisibilityChange();
+  }
+
+  async function show() {
+    setHidden(false);
+    dispatchVisibilityChange();
+    await tick();
+  }
+
+  // Hide the tab, pretend `ms` passed, and show it again
+  async function returnAfter(ms) {
+    hide();
+    heartbeatAgo(ms);
+    await show();
   }
 
   function modals() {
@@ -66,7 +74,7 @@ describe('App', () => {
       app = null;
     }
     modals().forEach(el => el.remove());
-    delete document.hidden;
+    restoreHidden();
     container.remove();
     localStorage.clear();
   });
@@ -106,14 +114,12 @@ describe('App', () => {
       seed.startTimer(timer.id);
       seed.pauseTimer(timer.id);
       localStorage.setItem('app_hidden_running_timers', JSON.stringify([timer.id]));
-      localStorage.setItem('pending_idle_previous_timer', timer.id);
       heartbeatAgo(300);
 
       createApp();
 
       expect(app.timerManager.getTimer(timer.id).isRunning()).to.be.true;
       expect(localStorage.getItem('app_hidden_running_timers')).to.be.null;
-      expect(localStorage.getItem('pending_idle_previous_timer')).to.be.null;
     });
 
     it('should pause a restored running timer when the app loads in a hidden tab', () => {
@@ -142,17 +148,15 @@ describe('App', () => {
   });
 
   describe('Visibility changes', () => {
-    it('should resume the running timer after a short hidden period without a modal', () => {
+    it('should resume the running timer after a short hidden period without a modal', async () => {
       const runningId = seedRunningTimer();
       createApp();
 
-      setHidden(true);
-      dispatchVisibilityChange();
+      hide();
       expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
 
       heartbeatAgo(5000);
-      setHidden(false);
-      dispatchVisibilityChange();
+      await show();
 
       expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
       expect(modals().length).to.equal(0);
@@ -163,12 +167,7 @@ describe('App', () => {
       const runningId = seedRunningTimer();
       createApp();
 
-      setHidden(true);
-      dispatchVisibilityChange();
-      heartbeatAgo(15000);
-      setHidden(false);
-      dispatchVisibilityChange();
-      await tick();
+      await returnAfter(15000);
 
       expect(modals().length).to.equal(1);
       expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
@@ -186,21 +185,10 @@ describe('App', () => {
       seedRunningTimer();
       createApp();
 
-      setHidden(true);
-      dispatchVisibilityChange();
-      heartbeatAgo(15000);
-      setHidden(false);
-      dispatchVisibilityChange();
-      await tick();
+      await returnAfter(15000);
       expect(modals().length).to.equal(1);
 
-      setHidden(true);
-      dispatchVisibilityChange();
-      heartbeatAgo(15000);
-      setHidden(false);
-      dispatchVisibilityChange();
-      await tick();
-
+      await returnAfter(15000);
       expect(modals().length).to.equal(1);
     });
 
@@ -208,18 +196,8 @@ describe('App', () => {
       const runningId = seedRunningTimer();
       createApp();
 
-      setHidden(true);
-      dispatchVisibilityChange();
-      heartbeatAgo(15000);
-      setHidden(false);
-      dispatchVisibilityChange();
-      await tick();
-
-      setHidden(true);
-      dispatchVisibilityChange();
-      heartbeatAgo(15000);
-      setHidden(false);
-      dispatchVisibilityChange();
+      await returnAfter(15000);
+      await returnAfter(15000);
       await tick(700);
 
       applyPreviousTimer();
@@ -228,16 +206,38 @@ describe('App', () => {
       expect(app.timerManager.getTimer(runningId).getElapsedMs()).to.be.at.least(30000);
     });
 
+    it('should still offer the previous timer after a reload while the modal was open', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      expect(modals().length).to.equal(1);
+
+      // A reload fires visibilitychange -> hidden on unload before the page goes away
+      hide();
+      app.destroy();
+      modals().forEach(el => el.remove());
+      restoreHidden();
+
+      createApp();
+      await tick();
+
+      expect(modals().length).to.equal(1);
+      expect(document.querySelector('.allocation-modal input[value="previous-timer"]').disabled).to.be.false;
+
+      applyPreviousTimer();
+      await tick();
+
+      const timer = app.timerManager.getTimer(runningId);
+      expect(timer.isRunning()).to.be.true;
+      expect(timer.getElapsedMs()).to.be.at.least(15000);
+    });
+
     it('should still resume the previous timer and clear tracking if allocation throws', async () => {
       const runningId = seedRunningTimer();
       createApp();
 
-      setHidden(true);
-      dispatchVisibilityChange();
-      heartbeatAgo(15000);
-      setHidden(false);
-      dispatchVisibilityChange();
-      await tick();
+      await returnAfter(15000);
 
       app.timerManager.distributeTime = () => { throw new Error('boom'); };
       applyPreviousTimer();
