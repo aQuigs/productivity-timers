@@ -68,8 +68,10 @@ export class TimerManager {
 
   /**
    * Persist current state to storage
+   * Called after every state change; callers may also invoke it periodically so a
+   * running timer's elapsed time survives a crash
    */
-  #persist() {
+  persist() {
     const state = {
       timers: this.#timers.map(timer => timer.toJSON()),
       runningTimerId: this.#runningTimerId
@@ -133,7 +135,7 @@ export class TimerManager {
 
     timer.start();
     this.#runningTimerId = id;
-    this.#persist();
+    this.persist();
     return true;
   }
 
@@ -153,7 +155,7 @@ export class TimerManager {
       this.#runningTimerId = null;
     }
 
-    this.#persist();
+    this.persist();
     return true;
   }
 
@@ -171,7 +173,7 @@ export class TimerManager {
     const timerTitle = title || `Timer ${timerNumber}`;
     const newTimer = new Timer(timerTitle);
     this.#timers.push(newTimer);
-    this.#persist();
+    this.persist();
     return newTimer;
   }
 
@@ -196,7 +198,7 @@ export class TimerManager {
     }
 
     this.#timers.splice(index, 1);
-    this.#persist();
+    this.persist();
     return true;
   }
 
@@ -207,7 +209,7 @@ export class TimerManager {
   resetAll() {
     this.#timers.forEach(timer => timer.reset());
     this.#runningTimerId = null;
-    this.#persist();
+    this.persist();
   }
 
   /**
@@ -224,7 +226,7 @@ export class TimerManager {
     }
 
     timer.title = newTitle;
-    this.#persist();
+    this.persist();
     return true;
   }
 
@@ -240,7 +242,7 @@ export class TimerManager {
     }
 
     timer.reset();
-    this.#persist();
+    this.persist();
     return true;
   }
 
@@ -262,7 +264,7 @@ export class TimerManager {
       }
     }
 
-    this.#persist();
+    this.persist();
     return successCount > 0;
   }
 }

@@ -158,12 +158,12 @@ export class Timer {
   /**
    * Adds milliseconds to the timer's elapsed time
    * @param {number} ms - Milliseconds to add (must be non-negative)
-   * @throws {TypeError} If ms is not a number
+   * @throws {TypeError} If ms is not a finite number
    * @throws {RangeError} If ms is negative
    */
   addMs(ms) {
-    if (typeof ms !== 'number') {
-      throw new TypeError('Milliseconds must be a number');
+    if (typeof ms !== 'number' || !Number.isFinite(ms)) {
+      throw new TypeError('Milliseconds must be a finite number');
     }
     if (ms < 0) {
       throw new RangeError('Amount must be non-negative');

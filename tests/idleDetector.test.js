@@ -176,6 +176,111 @@ describe('IdleDetector', () => {
     });
   });
 
+  describe('Heartbeat and Visibility', () => {
+    function setHidden(hidden) {
+      Object.defineProperty(document, 'hidden', {
+        configurable: true,
+        get() { return hidden; }
+      });
+    }
+
+    function dispatchVisibilityChange() {
+      document.dispatchEvent(new Event('visibilitychange'));
+    }
+
+    afterEach(() => {
+      delete document.hidden;
+    });
+
+    it('should accept a custom heartbeat interval', () => {
+      detector = new IdleDetector({ heartbeatInterval: 20 });
+      expect(detector.heartbeatInterval).to.equal(20);
+    });
+
+    it('should stop the heartbeat while hidden so the whole hidden period is measured as idle', (done) => {
+      detector = new IdleDetector({ heartbeatInterval: 20 });
+
+      setHidden(true);
+      dispatchVisibilityChange();
+      const stampedAtHide = localStorage.getItem('last_heartbeat');
+      expect(stampedAtHide).to.not.be.null;
+
+      setTimeout(() => {
+        expect(localStorage.getItem('last_heartbeat')).to.equal(stampedAtHide);
+        done();
+      }, 100);
+    });
+
+    it('should accumulate the full hidden duration and fire the callback when visible again', () => {
+      let received = null;
+      detector = new IdleDetector({
+        callback: (ms) => { received = ms; },
+        idleThreshold: 10000,
+        heartbeatInterval: 20
+      });
+
+      setHidden(true);
+      dispatchVisibilityChange();
+
+      // Simulate 15 seconds passing with the tab hidden
+      localStorage.setItem('last_heartbeat', String(Date.now() - 15000));
+
+      setHidden(false);
+      dispatchVisibilityChange();
+
+      expect(received).to.be.at.least(15000);
+      expect(parseInt(localStorage.getItem('accumulated_idle_ms'), 10)).to.be.at.least(15000);
+    });
+
+    it('should restart the heartbeat when the document becomes visible again', (done) => {
+      detector = new IdleDetector({ heartbeatInterval: 20 });
+
+      setHidden(true);
+      dispatchVisibilityChange();
+      setHidden(false);
+      dispatchVisibilityChange();
+      const stampedAtShow = Number(localStorage.getItem('last_heartbeat'));
+
+      setTimeout(() => {
+        expect(Number(localStorage.getItem('last_heartbeat'))).to.be.greaterThan(stampedAtShow);
+        done();
+      }, 100);
+    });
+
+    it('should not run the heartbeat when constructed while hidden', (done) => {
+      setHidden(true);
+      detector = new IdleDetector({ heartbeatInterval: 20 });
+      const stampedAtInit = localStorage.getItem('last_heartbeat');
+
+      setTimeout(() => {
+        expect(localStorage.getItem('last_heartbeat')).to.equal(stampedAtInit);
+        done();
+      }, 100);
+    });
+
+    it('should stop listening for visibility changes after destroy()', () => {
+      let calls = 0;
+      detector = new IdleDetector({ callback: () => { calls++; }, idleThreshold: 10000 });
+      detector.destroy();
+
+      localStorage.setItem('last_heartbeat', String(Date.now() - 15000));
+      setHidden(false);
+      dispatchVisibilityChange();
+
+      expect(calls).to.equal(0);
+    });
+
+    it('should return the accumulated idle total from checkIdle()', () => {
+      detector = new IdleDetector({ idleThreshold: 10000 });
+
+      localStorage.setItem('last_heartbeat', String(Date.now() - 5000));
+      const total = detector.checkIdle();
+
+      expect(total).to.be.at.least(5000);
+      expect(detector.checkIdle()).to.equal(total);
+    });
+  });
+
   describe('Timestamp Cleanup', () => {
     it('should clear hiddenTimestamp from localStorage after callback emission', () => {
       const callback = () => {};

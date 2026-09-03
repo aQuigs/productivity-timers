@@ -144,6 +144,73 @@ describe('TimeDistributor', () => {
     });
   });
 
+  describe('remainder handling', () => {
+    it('allocateFixed should add the remainder to a timer that already has a fixed amount', () => {
+      const fixedMap = new Map([['t1', 20000], ['t2', 10000]]);
+      const result = allocateFixed(60000, fixedMap, 't1');
+
+      expect(result.size).to.equal(2);
+      expect(result.get('t1')).to.equal(50000);
+      expect(result.get('t2')).to.equal(10000);
+    });
+
+    it('allocatePercentage should add the remainder to a timer that already has a percentage', () => {
+      const percentages = new Map([['t1', 50], ['t2', 30]]);
+      const result = allocatePercentage(60000, percentages, 't1');
+
+      expect(result.size).to.equal(2);
+      expect(result.get('t1')).to.equal(42000);
+      expect(result.get('t2')).to.equal(18000);
+    });
+
+    it('allocatePercentage should give rounding remainder to the largest share when no remainder timer is given', () => {
+      const percentages = new Map([['t1', 33], ['t2', 33], ['t3', 34]]);
+      const result = allocatePercentage(10, percentages);
+
+      expect(result.size).to.equal(3);
+      expect(result.has(undefined)).to.be.false;
+      expect(result.get('t1')).to.equal(3);
+      expect(result.get('t2')).to.equal(3);
+      expect(result.get('t3')).to.equal(4);
+    });
+
+    it('allocatePercentage should break ties for the largest share by insertion order', () => {
+      const percentages = new Map([['t1', 50], ['t2', 50]]);
+      const result = allocatePercentage(11, percentages);
+
+      expect(result.get('t1')).to.equal(6);
+      expect(result.get('t2')).to.equal(5);
+    });
+
+    it('allocateFixed should not create an undefined entry when nothing remains and no remainder timer is given', () => {
+      const result = allocateFixed(60000, new Map([['t1', 60000]]));
+
+      expect(result.size).to.equal(1);
+      expect(result.has(undefined)).to.be.false;
+      expect(result.get('t1')).to.equal(60000);
+    });
+
+    it('allocateFixed should throw when time remains but there is no timer to receive it', () => {
+      expect(() => allocateFixed(60000, new Map()))
+        .to.throw(RangeError, 'No timer to receive remaining time');
+    });
+
+    it('allocatePercentage should throw when time remains but there is no timer to receive it', () => {
+      expect(() => allocatePercentage(60000, new Map()))
+        .to.throw(RangeError, 'No timer to receive remaining time');
+    });
+  });
+
+  describe('rounding precision', () => {
+    it('should not lose a millisecond to floating-point error when converting percentages', () => {
+      // 0.57 * 1000 is 569.9999999999999 in IEEE-754; flooring it drops a millisecond
+      const result = allocatePercentage(100000, new Map([['t1', 0.57]]), 't2');
+
+      expect(result.get('t1')).to.equal(570);
+      expect(result.get('t2')).to.equal(99430);
+    });
+  });
+
   describe('allocateDiscard()', () => {
     it('should return empty Map', () => {
       const result = allocateDiscard(60000);
