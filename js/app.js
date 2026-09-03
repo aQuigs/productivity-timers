@@ -2,6 +2,13 @@ import { TimerManager } from './timerManager.js';
 import IdleDetector from './idleDetector.js';
 import AllocationModal from './allocationModal.js';
 import { allocateToSingle, allocateDiscard, allocateFixed, allocatePercentage } from './timeDistributor.js';
+import { formatDuration } from './formatDuration.js';
+
+const STATE_LABELS = {
+  running: 'Running',
+  paused: 'Paused',
+  stopped: ''
+};
 
 /**
  * App module - Handles DOM initialization, rendering, and event binding
@@ -12,9 +19,12 @@ class App {
     this.timerContainer = document.getElementById('timer-container');
     this.resetAllBtn = document.getElementById('reset-all-btn');
     this.addTimerBtn = document.getElementById('add-timer-btn');
+    this.totalTimeEl = document.getElementById('total-time');
     this.updateInterval = null;
     this.timerElements = new Map();
     this.lastDisplayedValues = new Map();
+    this.lastDisplayedStates = new Map();
+    this.lastDisplayedTotal = null;
     this.rafId = null;
 
     // Restore hiddenRunningTimers from localStorage (survives page reload)
@@ -62,6 +72,7 @@ class App {
     this.timerContainer.innerHTML = '';
     this.timerElements.clear();
     this.lastDisplayedValues.clear();
+    this.lastDisplayedStates.clear();
 
     const timers = this.timerManager.getAllTimers();
     timers.forEach(timer => {
@@ -72,6 +83,7 @@ class App {
     });
 
     this.updateAddTimerButton();
+    this.updateAllTimerDisplays();
   }
 
   /**
@@ -92,16 +104,21 @@ class App {
     titleInput.className = 'timer-title';
     titleInput.value = timer.title;
     titleInput.maxLength = 50;
+    titleInput.spellcheck = false;
+    titleInput.setAttribute('aria-label', 'Timer name');
     titleInput.addEventListener('blur', () => this.handleTitleChange(timer, titleInput));
-    titleInput.addEventListener('keypress', (e) => {
+    titleInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         titleInput.blur();
       }
     });
 
     const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
     removeBtn.className = 'timer-remove';
     removeBtn.textContent = '×';
+    removeBtn.title = 'Remove timer';
+    removeBtn.setAttribute('aria-label', 'Remove timer');
     removeBtn.disabled = this.timerManager.getAllTimers().length <= 1;
     removeBtn.addEventListener('click', () => this.handleRemoveTimer(timer.id));
 
@@ -115,18 +132,59 @@ class App {
     const controls = document.createElement('div');
     controls.className = 'timer-controls';
 
+    const state = document.createElement('span');
+    state.className = 'timer-state';
+
     const toggleBtn = document.createElement('button');
-    toggleBtn.className = timer.isRunning() ? 'btn btn-pause' : 'btn btn-start';
-    toggleBtn.textContent = timer.isRunning() ? 'Pause' : 'Start';
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'btn';
     toggleBtn.addEventListener('click', () => this.handleToggleTimer(timer.id));
 
+    controls.appendChild(state);
     controls.appendChild(toggleBtn);
 
     card.appendChild(header);
     card.appendChild(display);
     card.appendChild(controls);
 
+    this.applyTimerState(card, timer);
+
     return card;
+  }
+
+  /**
+   * Syncs a card's running/paused visuals with its timer's state
+   * @param {HTMLElement} card
+   * @param {Timer} timer
+   */
+  applyTimerState(card, timer) {
+    const running = timer.isRunning();
+
+    const toggleBtn = card.querySelector('.btn');
+    toggleBtn.classList.toggle('btn-pause', running);
+    toggleBtn.classList.toggle('btn-start', !running);
+    toggleBtn.textContent = running ? 'Pause' : 'Start';
+
+    const state = card.querySelector('.timer-state');
+    state.textContent = STATE_LABELS[timer.state] ?? '';
+    state.classList.toggle('is-running', running);
+
+    card.classList.toggle('active', running);
+    this.lastDisplayedStates.set(timer.id, timer.state);
+  }
+
+  /**
+   * Updates the header total when it changes
+   * @param {number} totalMs
+   */
+  updateTotalTime(totalMs) {
+    if (!this.totalTimeEl) return;
+
+    const formatted = formatDuration(totalMs);
+    if (formatted !== this.lastDisplayedTotal) {
+      this.totalTimeEl.textContent = formatted;
+      this.lastDisplayedTotal = formatted;
+    }
   }
 
   /**
@@ -154,29 +212,26 @@ class App {
    */
   updateAllTimerDisplays() {
     const timers = this.timerManager.getAllTimers();
+    let totalMs = 0;
+
     timers.forEach(timer => {
+      totalMs += timer.getElapsedMs();
+
       const card = this.timerElements.get(timer.id);
-      if (card) {
-        const newFormattedTime = timer.getFormattedTime();
-        const lastDisplayed = this.lastDisplayedValues.get(timer.id);
+      if (!card) return;
 
-        if (newFormattedTime !== lastDisplayed) {
-          const display = card.querySelector('.timer-display');
-          display.textContent = newFormattedTime;
-          this.lastDisplayedValues.set(timer.id, newFormattedTime);
-        }
+      const newFormattedTime = timer.getFormattedTime();
+      if (newFormattedTime !== this.lastDisplayedValues.get(timer.id)) {
+        card.querySelector('.timer-display').textContent = newFormattedTime;
+        this.lastDisplayedValues.set(timer.id, newFormattedTime);
+      }
 
-        const toggleBtn = card.querySelector('.btn');
-        toggleBtn.className = timer.isRunning() ? 'btn btn-pause' : 'btn btn-start';
-        toggleBtn.textContent = timer.isRunning() ? 'Pause' : 'Start';
-
-        if (timer.isRunning()) {
-          card.classList.add('active');
-        } else {
-          card.classList.remove('active');
-        }
+      if (timer.state !== this.lastDisplayedStates.get(timer.id)) {
+        this.applyTimerState(card, timer);
       }
     });
+
+    this.updateTotalTime(totalMs);
   }
 
   /**
@@ -220,8 +275,7 @@ class App {
    * Handle reset all timers
    */
   handleResetAll() {
-    const timers = this.timerManager.getAllTimers();
-    timers.forEach(timer => timer.reset());
+    this.timerManager.resetAll();
     this.updateAllTimerDisplays();
   }
 
@@ -262,6 +316,7 @@ class App {
         card.remove();
         this.timerElements.delete(timerId);
         this.lastDisplayedValues.delete(timerId);
+        this.lastDisplayedStates.delete(timerId);
       }
 
       this.updateRemoveButtons();
