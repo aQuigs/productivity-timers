@@ -1,8 +1,10 @@
 import { TimerManager } from './timerManager.js';
-import IdleDetector from './idleDetector.js';
+import IdleDetector, { DEFAULT_IDLE_THRESHOLD_MS } from './idleDetector.js';
 import AllocationModal from './allocationModal.js';
 import { allocateToSingle, allocateDiscard, allocateFixed, allocatePercentage } from './timeDistributor.js';
 import { formatDuration } from './formatDuration.js';
+
+const HIDDEN_RUNNING_TIMERS_KEY = 'app_hidden_running_timers';
 
 const STATE_LABELS = {
   running: 'Running',
@@ -13,29 +15,26 @@ const STATE_LABELS = {
 /**
  * App module - Handles DOM initialization, rendering, and event binding
  */
-class App {
+export class App {
   constructor() {
     this.timerManager = new TimerManager();
     this.timerContainer = document.getElementById('timer-container');
     this.resetAllBtn = document.getElementById('reset-all-btn');
     this.addTimerBtn = document.getElementById('add-timer-btn');
     this.totalTimeEl = document.getElementById('total-time');
-    this.updateInterval = null;
     this.timerElements = new Map();
     this.lastDisplayedValues = new Map();
     this.lastDisplayedStates = new Map();
     this.lastDisplayedTotal = null;
     this.rafId = null;
-
-    // Restore hiddenRunningTimers from localStorage (survives page reload)
-    const savedHiddenTimers = localStorage.getItem('app_hidden_running_timers');
-    this.hiddenRunningTimers = savedHiddenTimers
-      ? new Set(JSON.parse(savedHiddenTimers))
-      : new Set();
+    this.allocationInProgress = false;
+    this.idleThreshold = DEFAULT_IDLE_THRESHOLD_MS;
+    this.hiddenRunningTimers = this.#loadHiddenRunningTimers();
 
     this.idleDetector = new IdleDetector({
-      callback: (idleMs) => this.handleIdleReturn(idleMs),
-      idleThreshold: 10000
+      idleThreshold: this.idleThreshold,
+      onHidden: () => this.handleHidden(),
+      onVisible: (idleMs) => this.handleIdleReturn(idleMs)
     });
   }
 
@@ -46,23 +45,41 @@ class App {
     this.renderAllTimers();
     this.bindGlobalEvents();
     this.startUpdateLoop();
-    this.checkPendingIdle();
+
+    if (document.hidden) {
+      // Loaded in a background tab: no visibilitychange fires for the initial state
+      this.handleHidden();
+    } else {
+      // Unloading fires visibilitychange -> hidden, so after a refresh the running timer
+      // is paused and waiting here, possibly together with idle time to allocate
+      this.handleIdleReturn(this.idleDetector.checkIdle());
+    }
   }
 
   /**
-   * Check if there's accumulated idle duration from before page reload
+   * Tear down timers and document-level listeners (used by tests)
    */
-  checkPendingIdle() {
-    const accumulatedIdleMs = localStorage.getItem('accumulated_idle_ms');
-    const pendingPreviousTimer = localStorage.getItem('pending_idle_previous_timer');
-
-    if (accumulatedIdleMs) {
-      const idleMs = parseInt(accumulatedIdleMs, 10);
-      if (idleMs > 0) {
-        // handleIdleReturn will resume if <= 10000, or show modal if > 10000
-        this.handleIdleReturn(idleMs, pendingPreviousTimer);
-      }
+  destroy() {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
     }
+    this.idleDetector.destroy();
+  }
+
+  #loadHiddenRunningTimers() {
+    try {
+      const saved = localStorage.getItem(HIDDEN_RUNNING_TIMERS_KEY);
+      const ids = saved ? JSON.parse(saved) : [];
+      return new Set(Array.isArray(ids) ? ids : []);
+    } catch (error) {
+      console.warn('Ignoring corrupted hidden-timer state:', error);
+      return new Set();
+    }
+  }
+
+  #saveHiddenRunningTimers() {
+    localStorage.setItem(HIDDEN_RUNNING_TIMERS_KEY, JSON.stringify(Array.from(this.hiddenRunningTimers)));
   }
 
   /**
@@ -78,12 +95,16 @@ class App {
     timers.forEach(timer => {
       const timerCard = this.createTimerCard(timer);
       this.timerContainer.appendChild(timerCard);
-      this.timerElements.set(timer.id, timerCard);
-      this.lastDisplayedValues.set(timer.id, timer.getFormattedTime());
+      this.#trackCard(timer, timerCard);
     });
 
     this.updateAddTimerButton();
     this.updateAllTimerDisplays();
+  }
+
+  #trackCard(timer, card) {
+    this.timerElements.set(timer.id, card);
+    this.lastDisplayedValues.set(timer.id, timer.getFormattedTime());
   }
 
   /**
@@ -193,7 +214,6 @@ class App {
   bindGlobalEvents() {
     this.resetAllBtn.addEventListener('click', () => this.handleResetAll());
     this.addTimerBtn.addEventListener('click', () => this.handleAddTimer());
-    document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
   }
 
   /**
@@ -208,11 +228,12 @@ class App {
   }
 
   /**
-   * Update all timer displays
+   * Update all timer displays, touching the DOM only where something changed
    */
   updateAllTimerDisplays() {
     const timers = this.timerManager.getAllTimers();
     let totalMs = 0;
+    let runningTimerTicked = false;
 
     timers.forEach(timer => {
       totalMs += timer.getElapsedMs();
@@ -224,6 +245,9 @@ class App {
       if (newFormattedTime !== this.lastDisplayedValues.get(timer.id)) {
         card.querySelector('.timer-display').textContent = newFormattedTime;
         this.lastDisplayedValues.set(timer.id, newFormattedTime);
+        if (timer.isRunning()) {
+          runningTimerTicked = true;
+        }
       }
 
       if (timer.state !== this.lastDisplayedStates.get(timer.id)) {
@@ -232,6 +256,12 @@ class App {
     });
 
     this.updateTotalTime(totalMs);
+
+    if (runningTimerTicked) {
+      // Elapsed time is otherwise only saved on state changes, so a crash would
+      // lose everything tracked since the last click
+      this.timerManager.persist();
+    }
   }
 
   /**
@@ -265,6 +295,7 @@ class App {
 
     try {
       this.timerManager.updateTimerTitle(timer.id, newTitle);
+      input.value = newTitle;
     } catch (error) {
       input.value = timer.title;
       alert(error.message);
@@ -292,8 +323,7 @@ class App {
     const newTimer = this.timerManager.addTimer();
     const timerCard = this.createTimerCard(newTimer);
     this.timerContainer.appendChild(timerCard);
-    this.timerElements.set(newTimer.id, timerCard);
-    this.lastDisplayedValues.set(newTimer.id, newTimer.getFormattedTime());
+    this.#trackCard(newTimer, timerCard);
 
     this.updateRemoveButtons();
     this.updateAddTimerButton();
@@ -349,183 +379,96 @@ class App {
   }
 
   /**
-   * Handle page visibility changes
-   * Pauses running timers when page becomes hidden
-   * IdleDetector handles resume logic based on idle duration
+   * Pause running timers while the page is hidden and remember which to resume
    */
-  handleVisibilityChange() {
-    if (document.hidden) {
-      const timers = this.timerManager.getAllTimers();
-      this.hiddenRunningTimers.clear();
+  handleHidden() {
+    const running = this.timerManager.getAllTimers().filter(timer => timer.isRunning());
+    running.forEach(timer => this.timerManager.pauseTimer(timer.id));
 
-      timers.forEach(timer => {
-        if (timer.isRunning()) {
-          this.hiddenRunningTimers.add(timer.id);
-          this.timerManager.pauseTimer(timer.id);
-        }
-      });
-
-      // CRITICAL: Save to localStorage (survives page reload/navigation)
-      localStorage.setItem('app_hidden_running_timers', JSON.stringify(Array.from(this.hiddenRunningTimers)));
-
-      // Save the running timer ID for idle allocation
-      if (this.hiddenRunningTimers.size > 0) {
-        const runningId = Array.from(this.hiddenRunningTimers)[0];
-        localStorage.setItem('pending_idle_previous_timer', runningId);
-      }
-    } else {
-      // Tab visible - check if we should resume or wait for modal
-      const accumulated = parseInt(localStorage.getItem('accumulated_idle_ms') || '0', 10);
-      if (accumulated <= 10000) {
-        // Short idle - just resume
-        this.handleResume();
-      }
-      // Otherwise IdleDetector will call handleIdleReturn() with accumulated time
+    // While the allocation modal is open the set still names the timer to resume
+    // afterwards, so only replace it when something was actually running
+    if (running.length > 0 || !this.allocationInProgress) {
+      this.hiddenRunningTimers = new Set(running.map(timer => timer.id));
+      this.#saveHiddenRunningTimers();
     }
   }
 
   /**
-   * Handle resume after short idle (<= threshold)
-   * Called by IdleDetector when idle duration is below threshold
+   * Resume the timers paused on hide and discard any pending idle time
    */
   handleResume() {
-    // Auto-resume previously running timers
     this.hiddenRunningTimers.forEach(timerId => {
       this.timerManager.startTimer(timerId);
     });
     this.hiddenRunningTimers.clear();
-    // Clear from localStorage
-    localStorage.removeItem('app_hidden_running_timers');
-    localStorage.removeItem('pending_idle_previous_timer');
-    // Clear accumulated idle
+    localStorage.removeItem(HIDDEN_RUNNING_TIMERS_KEY);
     this.idleDetector.clearAccumulatedIdle();
     this.updateAllTimerDisplays();
   }
 
   /**
-   * Handle computer sleep/wake detection
-   * Pauses running timers and corrects for incorrectly accumulated sleep time
-   * @param {number} sleepMs - Sleep duration in milliseconds
+   * Handle return from an idle period: resume directly when it is short, otherwise
+   * let the user allocate it before resuming
+   * @param {number} idleMs - Accumulated idle duration in milliseconds
    */
-  handleSleepDetected(sleepMs) {
-    const timers = this.timerManager.getAllTimers();
-    let runningTimerId = null;
-
-    timers.forEach(timer => {
-      if (timer.isRunning()) {
-        runningTimerId = timer.id;
-        // Timer incorrectly accumulated sleepMs during sleep
-        // Pause it and subtract the sleep time
-        this.timerManager.pauseTimer(timer.id);
-
-        // Subtract the incorrectly accumulated sleep time
-        const currentElapsed = timer.getElapsedMs();
-        const correctedElapsed = Math.max(0, currentElapsed - sleepMs);
-        timer.elapsedMs = correctedElapsed;
-      }
-    });
-
-    if (runningTimerId) {
-      this.hiddenRunningTimers.add(runningTimerId);
-      localStorage.setItem('app_hidden_running_timers', JSON.stringify(Array.from(this.hiddenRunningTimers)));
-      localStorage.setItem('pending_idle_previous_timer', runningTimerId);
+  async handleIdleReturn(idleMs) {
+    // An open modal already tracks further idle time itself; a second modal would
+    // allocate the same period twice
+    if (this.allocationInProgress) {
+      return;
     }
 
-    this.updateAllTimerDisplays();
-  }
-
-  /**
-   * Handle return from idle period
-   * Shows modal for time allocation if idle duration exceeds threshold
-   * Otherwise just resumes timers
-   * @param {number} idleMs - Idle duration in milliseconds (accumulated)
-   * @param {string|null} overridePreviousTimerId - Optional override from pending idle restore
-   */
-  async handleIdleReturn(idleMs, overridePreviousTimerId = null) {
-    // If below threshold, just resume timers
-    if (idleMs <= 10000) {
+    if (idleMs <= this.idleThreshold) {
       this.handleResume();
       return;
     }
 
-    const timers = this.timerManager.getAllTimers();
+    this.allocationInProgress = true;
 
-    // Get previous running timer from multiple sources
-    const previousRunningId = overridePreviousTimerId
-      || (this.hiddenRunningTimers.size > 0 ? Array.from(this.hiddenRunningTimers)[0] : null)
-      || localStorage.getItem('pending_idle_previous_timer');
+    // Normally the running timer was paused on hide; after a reload the manager may
+    // instead have restarted it
+    const [pausedOnHide] = this.hiddenRunningTimers;
+    const runningTimer = this.timerManager.getRunningTimer();
+    const previousRunningId = pausedOnHide || (runningTimer ? runningTimer.id : null);
 
-    if (previousRunningId) {
-      localStorage.setItem('pending_idle_previous_timer', previousRunningId);
+    try {
+      const modal = new AllocationModal(idleMs, this.timerManager.getAllTimers(), previousRunningId);
+      const result = await modal.show();
+      const allocations = this.buildAllocations(result);
+      if (allocations.size > 0) {
+        this.timerManager.distributeTime(allocations);
+      }
+    } catch (error) {
+      console.error('Failed to allocate idle time:', error);
+    } finally {
+      this.allocationInProgress = false;
+      this.hiddenRunningTimers = new Set(previousRunningId ? [previousRunningId] : []);
+      this.handleResume();
     }
+  }
 
-    // Show allocation modal with accumulated idle time
-    const modal = new AllocationModal(idleMs, timers, previousRunningId);
-    const result = await modal.show();
-
-    // Apply allocation based on strategy
-    let allocations = new Map();
+  /**
+   * Translate the modal's selection into per-timer allocations
+   * @param {{strategy: string, config: Object, idleMs: number}} result - Modal result
+   * @returns {Map<string, number>}
+   */
+  buildAllocations(result) {
+    // The modal keeps counting idle time while open; allocate what it last showed
+    const idleMs = result.idleMs;
 
     switch (result.strategy) {
       case 'previous-timer':
-        if (previousRunningId) {
-          allocations = allocateToSingle(idleMs, previousRunningId);
-        }
-        break;
-
       case 'selected-timer':
-        if (result.config.timerId) {
-          allocations = allocateToSingle(idleMs, result.config.timerId);
-        }
-        break;
+        return result.config.timerId ? allocateToSingle(idleMs, result.config.timerId) : allocateDiscard();
 
       case 'fixed-distribution':
-        allocations = allocateFixed(
-          idleMs,
-          result.config.allocations,
-          result.config.remainderTimerId
-        );
-        break;
+        return allocateFixed(idleMs, result.config.allocations, result.config.remainderTimerId);
 
       case 'percentage-distribution':
-        allocations = allocatePercentage(
-          idleMs,
-          result.config.percentages,
-          result.config.remainderTimerId
-        );
-        break;
+        return allocatePercentage(idleMs, result.config.percentages, result.config.remainderTimerId);
 
-      case 'discard':
       default:
-        // No allocation
-        allocations = allocateDiscard();
-        break;
+        return allocateDiscard();
     }
-
-    // Apply allocations to timers
-    if (allocations.size > 0) {
-      this.timerManager.distributeTime(allocations);
-    }
-
-    // Resume previously running timer if it still exists
-    if (previousRunningId && this.timerManager.getTimer(previousRunningId)) {
-      this.timerManager.startTimer(previousRunningId);
-    }
-
-    // Clear tracking and update displays
-    this.hiddenRunningTimers.clear();
-    localStorage.removeItem('app_hidden_running_timers');
-    localStorage.removeItem('pending_idle_previous_timer');
-
-    // Clear accumulated idle and reset last active timestamp
-    this.idleDetector.clearAccumulatedIdle();
-
-    this.updateAllTimerDisplays();
   }
 }
-
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  const app = new App();
-  app.init();
-});

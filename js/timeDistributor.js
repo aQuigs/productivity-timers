@@ -4,6 +4,39 @@
  */
 
 /**
+ * Adds leftover time to the remainder timer, or to the largest existing share when
+ * no remainder timer is given, so rounding dust is never silently dropped
+ * @param {Map<string, number>} result - Allocations built so far (mutated)
+ * @param {Map<string, number>} shares - Caller-requested shares, used to pick the largest
+ * @param {number} remainder - Milliseconds left to allocate
+ * @param {string} [remainderTimerId] - Preferred recipient
+ * @throws {RangeError} If time remains and there is no timer to receive it
+ */
+function assignRemainder(result, shares, remainder, remainderTimerId) {
+  const target = remainderTimerId || (remainder > 0 ? largestShare(shares) : null);
+
+  if (remainder > 0 && !target) {
+    throw new RangeError('No timer to receive remaining time');
+  }
+
+  if (target) {
+    result.set(target, (result.get(target) || 0) + remainder);
+  }
+}
+
+function largestShare(shares) {
+  let target = null;
+  let largest = -Infinity;
+  for (const [timerId, share] of shares) {
+    if (share > largest) {
+      largest = share;
+      target = timerId;
+    }
+  }
+  return target;
+}
+
+/**
  * Allocates all time to a single timer
  * @param {number} totalMs - Total milliseconds to allocate
  * @param {string} timerId - Timer to receive all time
@@ -19,7 +52,7 @@ export function allocateToSingle(totalMs, timerId) {
  * Allocates fixed amounts to specified timers, remainder goes to remainderTimerId
  * @param {number} totalMs - Total milliseconds to allocate
  * @param {Map<string, number>} fixedMap - Map of timerId to fixed milliseconds
- * @param {string} remainderTimerId - Timer to receive remaining time
+ * @param {string} [remainderTimerId] - Timer to receive remaining time
  * @returns {Map<string, number>}
  * @throws {RangeError} If fixed allocations exceed total
  */
@@ -36,8 +69,7 @@ export function allocateFixed(totalMs, fixedMap, remainderTimerId) {
     throw new RangeError('Fixed allocations exceed total time');
   }
 
-  const remainder = totalMs - allocated;
-  result.set(remainderTimerId, remainder);
+  assignRemainder(result, fixedMap, totalMs - allocated, remainderTimerId);
 
   return result;
 }
@@ -47,7 +79,7 @@ export function allocateFixed(totalMs, fixedMap, remainderTimerId) {
  * Uses BigInt for precise rounding to ensure no milliseconds are lost
  * @param {number} totalMs - Total milliseconds to allocate
  * @param {Map<string, number>} percentages - Map of timerId to percentage (0-100)
- * @param {string} remainderTimerId - Timer to receive remaining time
+ * @param {string} [remainderTimerId] - Timer to receive remaining time
  * @returns {Map<string, number>}
  * @throws {RangeError} If percentages exceed 100%
  */
@@ -66,14 +98,14 @@ export function allocatePercentage(totalMs, percentages, remainderTimerId) {
   let allocated = 0;
 
   for (const [timerId, percentage] of percentages.entries()) {
-    const amount = (BigInt(totalMs) * BigInt(Math.floor(percentage * 1000))) / BigInt(100000);
-    const amountNum = Number(amount);
-    result.set(timerId, amountNum);
-    allocated += amountNum;
+    // Round the per-mille conversion: 0.57 * 1000 is 569.999... in floating point
+    const perMille = BigInt(Math.round(percentage * 1000));
+    const amount = Number((BigInt(totalMs) * perMille) / BigInt(100000));
+    result.set(timerId, amount);
+    allocated += amount;
   }
 
-  const remainder = totalMs - allocated;
-  result.set(remainderTimerId, remainder);
+  assignRemainder(result, percentages, totalMs - allocated, remainderTimerId);
 
   return result;
 }

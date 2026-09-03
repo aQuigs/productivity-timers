@@ -440,6 +440,18 @@ describe('Timer', () => {
       expect(() => timer.addMs(-100)).to.throw(RangeError, 'Amount must be non-negative');
     });
 
+    it('should throw TypeError when adding NaN so elapsed time cannot be corrupted', () => {
+      const timer = new Timer('Test');
+      timer.elapsedMs = 1000;
+      expect(() => timer.addMs(NaN)).to.throw(TypeError, 'Milliseconds must be a finite number');
+      expect(timer.getElapsedMs()).to.equal(1000);
+    });
+
+    it('should throw TypeError when adding Infinity', () => {
+      const timer = new Timer('Test');
+      expect(() => timer.addMs(Infinity)).to.throw(TypeError, 'Milliseconds must be a finite number');
+    });
+
     it('should throw RangeError for negative amount even on running timer', (done) => {
       const timer = new Timer('Test');
       timer.start();
