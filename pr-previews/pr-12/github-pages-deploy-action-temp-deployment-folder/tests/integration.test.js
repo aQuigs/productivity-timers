@@ -77,7 +77,7 @@ describe('Integration Tests', () => {
 
       const modal = new AllocationModal(30000, timers, timer1.id);
 
-      // Auto-select 'discard' and trigger Apply programmatically
+      // Apply the default selection without choosing a strategy
       setTimeout(() => {
         const applyBtn = document.querySelector('.btn-apply');
         if (applyBtn) {
@@ -86,7 +86,8 @@ describe('Integration Tests', () => {
       }, 50);
 
       const result = await modal.show();
-      expect(result.strategy).to.equal('discard');
+      expect(result.strategy).to.equal('previous-timer');
+      expect(result.config.timerId).to.equal(timer1.id);
     });
 
     it('should complete full idle allocation flow: detect -> modal -> allocate -> resume', async () => {
@@ -183,7 +184,7 @@ describe('Integration Tests', () => {
       const timers = timerManager.getAllTimers();
       const modal = new AllocationModal(idleMs, timers, hiddenTimerId);
 
-      // Auto-apply discard
+      // Apply the default (previous-timer, which now points at the deleted timer)
       setTimeout(() => {
         const applyBtn = document.querySelector('.btn-apply');
         if (applyBtn) applyBtn.click();
