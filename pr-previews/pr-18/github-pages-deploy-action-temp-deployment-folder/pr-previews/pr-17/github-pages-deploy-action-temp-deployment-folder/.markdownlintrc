@@ -1,7 +1,0 @@
-{
-  // Disable 80 char line limit
-  "line-length": false,
-
-  // Allow duplcate headers
-  "no-duplicate-heading": false
-}
