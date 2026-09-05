@@ -108,6 +108,7 @@ timers/
 
 **AllocationModal (allocationModal.js)** / **TimeDistributor (timeDistributor.js)**
 - Modal resolves `{ strategy, config, idleMs }`; `idleMs` is the total it last displayed (it polls `accumulated_idle_ms` while open)
+- For `selected-timer`, `config.makeRunning` mirrors the "Make this the running timer" checkbox; App then resumes that timer instead of the previous one
 - Default selection is `previous-timer` when a timer was running before the tab went idle, otherwise `discard` (the `previous-timer` option is disabled in that case)
 - Distributor functions add the remainder to a timer that already has a share; with no remainder timer, rounding dust goes to the largest share
 
@@ -123,7 +124,7 @@ When a user starts timer B while timer A is running:
 **Page Visibility / Window Focus Handling:**
 - IdleDetector owns the `visibilitychange` and window `blur`/`focus` listeners and calls App's `onInactive` / `onActive(total)` hooks; App registers no listener of its own. Hidden tab and unfocused window are the same idle flow with the same 10 s threshold
 - On inactive (`App.handleInactive()`): running timers are paused and their IDs stored in `hiddenRunningTimers`, mirrored to localStorage because browsers fire `visibilitychange` → hidden on unload. While a modal is open the set is only replaced if something was actually running, so it keeps naming the timer to resume
-- On active and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes. Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
+- On active and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes (or the chosen timer, when the user ticked "Make this the running timer"). Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
 - If the app loads in a hidden tab or an unfocused window (`idleDetector.isActive()` false), `init()` calls `handleInactive()` instead
 
 **Goals:**

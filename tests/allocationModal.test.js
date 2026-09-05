@@ -1170,4 +1170,98 @@ describe('AllocationModal', () => {
       expect(dialog.getAttribute('aria-labelledby')).to.equal(title.id);
     });
   });
+
+  describe('Make-running checkbox', () => {
+    const timers = [
+      { id: 'timer-1', title: 'Timer 1' },
+      { id: 'timer-2', title: 'Timer 2' }
+    ];
+    const checkbox = () => document.querySelector('.allocation-modal .timer-select-detail input.make-running-checkbox');
+    const isVisible = (el) => el.getClientRects().length > 0;
+    const choose = (value) => {
+      const radio = document.querySelector(`.allocation-modal input[value="${value}"]`);
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change'));
+    };
+    const apply = () => document.querySelector('.allocation-modal button.btn-apply').click();
+
+    it('should render an unchecked checkbox in the selected-timer detail', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+
+      const box = checkbox();
+      expect(box).to.exist;
+      expect(box.type).to.equal('checkbox');
+      expect(box.checked).to.be.false;
+    });
+
+    it('should wrap the checkbox in a label that names the behaviour', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+
+      const label = checkbox().closest('label');
+      expect(label).to.exist;
+      expect(label.textContent).to.include('Make this the running timer');
+    });
+
+    it('should only show the checkbox while selected-timer is chosen', () => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      modal.show();
+
+      expect(isVisible(checkbox()), 'hidden under the default strategy').to.be.false;
+      choose('selected-timer');
+      expect(isVisible(checkbox()), 'shown once selected-timer is chosen').to.be.true;
+      choose('discard');
+      expect(isVisible(checkbox()), 'hidden again after switching away').to.be.false;
+    });
+
+    it('should resolve selected-timer with makeRunning false when unchecked', (done) => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      const promise = modal.show();
+
+      choose('selected-timer');
+      document.querySelector('.allocation-modal select.timer-select').value = 'timer-2';
+      apply();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('selected-timer');
+        expect(result.config.timerId).to.equal('timer-2');
+        expect(result.config.makeRunning).to.be.false;
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve selected-timer with makeRunning true when checked', (done) => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      const promise = modal.show();
+
+      choose('selected-timer');
+      document.querySelector('.allocation-modal select.timer-select').value = 'timer-2';
+      checkbox().click();
+      apply();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('selected-timer');
+        expect(result.config.timerId).to.equal('timer-2');
+        expect(result.config.makeRunning).to.be.true;
+        done();
+      }).catch(done);
+    });
+
+    it('should not report makeRunning for other strategies even if it was ticked', (done) => {
+      modal = new AllocationModal(60000, timers, 'timer-1');
+      const promise = modal.show();
+
+      choose('selected-timer');
+      checkbox().click();
+      choose('previous-timer');
+      apply();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('previous-timer');
+        expect(result.config).to.not.have.property('makeRunning');
+        done();
+      }).catch(done);
+    });
+  });
 });

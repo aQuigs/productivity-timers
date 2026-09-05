@@ -817,10 +817,15 @@ export class App {
     const [pausedOnHide] = this.hiddenRunningTimers;
     const runningTimer = this.timerManager.getRunningTimer();
     const previousRunningId = pausedOnHide || (runningTimer ? runningTimer.id : null);
+    let resumeId = previousRunningId;
 
     try {
       const modal = new AllocationModal(idleMs, this.timerManager.getAllTimers(), previousRunningId);
       const result = await modal.show();
+      // The user's choice of which timer runs next should hold even if allocating fails
+      if (result.config.makeRunning && result.config.timerId) {
+        resumeId = result.config.timerId;
+      }
       const allocations = this.buildAllocations(result);
       if (allocations.size > 0) {
         this.timerManager.distributeTime(allocations);
@@ -829,7 +834,7 @@ export class App {
       console.error('Failed to allocate idle time:', error);
     } finally {
       this.allocationInProgress = false;
-      this.hiddenRunningTimers = new Set(previousRunningId ? [previousRunningId] : []);
+      this.hiddenRunningTimers = new Set(resumeId ? [resumeId] : []);
       this.handleResume();
     }
   }
