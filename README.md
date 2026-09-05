@@ -108,9 +108,9 @@ The app automatically deploys to GitHub Pages when you push to the `main` branch
 1. Push changes to `main`
 2. GitHub Actions runs tests
 3. If tests pass, deploys to GitHub Pages
-4. Site available at `https://aQuigs.github.io/timers`
+4. Site available at `https://aquigs.github.io/productivity-timers`
 
-Pull requests get a preview at `https://aQuigs.github.io/timers/pr-previews/pr-<number>/`. Previews share the production origin, so the app prefixes its localStorage keys with the PR name there: each preview keeps its own timers and idle state, and production data is never touched.
+Pull requests get a preview at `https://aquigs.github.io/productivity-timers/pr-previews/pr-<number>/`. Previews share the production origin, so the app prefixes its localStorage keys with the PR name there: each preview keeps its own timers and idle state, and production data is never touched.
 
 ## Browser Support
 
