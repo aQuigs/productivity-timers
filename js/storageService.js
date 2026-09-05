@@ -1,4 +1,5 @@
 import { Timer } from './timer.js';
+import { namespacedKey } from './storageNamespace.js';
 
 /**
  * StorageService - Handles localStorage persistence for timer state
@@ -9,7 +10,7 @@ export class StorageService {
   #version;
   available;
 
-  constructor(storageKey = 'productivity-timers-v1') {
+  constructor(storageKey = namespacedKey('productivity-timers-v1')) {
     this.#storageKey = storageKey;
     this.#version = 1;
     this.available = this.#checkAvailability();

@@ -1,5 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import { StorageService } from '../js/storageService.js';
+import { atPreviewPath } from './helpers.js';
 
 describe('StorageService', () => {
   let storage;
@@ -432,6 +433,48 @@ describe('StorageService', () => {
       Object.defineProperty(brokenStorage, 'available', { value: false });
 
       expect(brokenStorage.load()).to.be.null;
+    });
+  });
+
+  describe('PR Preview Isolation', () => {
+    const state = {
+      timers: [{ id: 'a', title: 'T1', elapsedMs: 5, state: 'paused' }],
+      runningTimerId: null
+    };
+
+    it('should save under a per-PR key when the page is a PR preview', async () => {
+      await atPreviewPath('pr-12', () => {
+        expect(new StorageService().save(state)).to.be.true;
+      });
+
+      expect(localStorage.getItem('pr-12:productivity-timers-v1')).to.not.be.null;
+      expect(localStorage.getItem('productivity-timers-v1')).to.be.null;
+    });
+
+    it('should not see production state from a PR preview', async () => {
+      expect(storage.save(state)).to.be.true;
+
+      await atPreviewPath('pr-12', () => {
+        expect(new StorageService().load()).to.be.null;
+      });
+    });
+
+    it('should not see another PR preview\'s state', async () => {
+      await atPreviewPath('pr-12', () => {
+        expect(new StorageService().save(state)).to.be.true;
+      });
+
+      await atPreviewPath('pr-13', () => {
+        expect(new StorageService().load()).to.be.null;
+      });
+    });
+
+    it('should keep using the per-PR key after the page path is no longer read', async () => {
+      const preview = await atPreviewPath('pr-12', () => new StorageService());
+
+      expect(preview.save(state)).to.be.true;
+      expect(localStorage.getItem('pr-12:productivity-timers-v1')).to.not.be.null;
+      expect(localStorage.getItem('productivity-timers-v1')).to.be.null;
     });
   });
 });
