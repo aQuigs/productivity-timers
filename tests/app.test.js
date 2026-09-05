@@ -48,6 +48,10 @@ describe('App', () => {
 
   function applyPreviousTimer() {
     document.querySelector('.allocation-modal input[value="previous-timer"]').click();
+    applyDefault();
+  }
+
+  function applyDefault() {
     document.querySelector('.allocation-modal button.btn-apply').click();
   }
 
@@ -101,6 +105,37 @@ describe('App', () => {
       const timer = app.timerManager.getTimer(runningId);
       expect(timer.getElapsedMs()).to.be.at.least(15000);
       expect(timer.isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should add idle time to the previously running timer when Apply is clicked without choosing a strategy', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+
+      createApp();
+      await tick();
+
+      applyDefault();
+      await tick();
+
+      const timer = app.timerManager.getTimer(runningId);
+      expect(timer.getElapsedMs()).to.be.at.least(15000);
+      expect(timer.isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should discard idle time by default when nothing was running before', async () => {
+      heartbeatAgo(15000);
+
+      createApp();
+      await tick();
+
+      applyDefault();
+      await tick();
+
+      const elapsed = app.timerManager.getAllTimers().map(timer => timer.getElapsedMs());
+      expect(elapsed).to.not.be.empty;
+      expect(elapsed.every(ms => ms === 0)).to.be.true;
       expect(modals().length).to.equal(0);
     });
 
