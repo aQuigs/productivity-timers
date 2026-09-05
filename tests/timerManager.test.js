@@ -409,6 +409,161 @@ describe('TimerManager', () => {
     });
   });
 
+  describe('Reordering', () => {
+    function ids(manager) {
+      return manager.getAllTimers().map(timer => timer.id);
+    }
+
+    function countingStorage() {
+      const storage = new StorageService();
+      const saves = [];
+      const save = storage.save.bind(storage);
+      storage.save = (state) => {
+        saves.push(state);
+        return save(state);
+      };
+      storage.saves = saves;
+      return storage;
+    }
+
+    describe('moveTimer()', () => {
+      it('should move a timer to a later index and shift the others up', () => {
+        const manager = new TimerManager(3);
+        const [a, b, c] = ids(manager);
+
+        expect(manager.moveTimer(a, 2)).to.be.true;
+
+        expect(ids(manager)).to.deep.equal([b, c, a]);
+      });
+
+      it('should move a timer to an earlier index and shift the others down', () => {
+        const manager = new TimerManager(3);
+        const [a, b, c] = ids(manager);
+
+        manager.moveTimer(c, 0);
+
+        expect(ids(manager)).to.deep.equal([c, a, b]);
+      });
+
+      it('should return false for an unknown timer id', () => {
+        const manager = new TimerManager(2);
+
+        expect(manager.moveTimer('invalid-id', 0)).to.be.false;
+      });
+
+      it('should throw RangeError for an index outside the list', () => {
+        const manager = new TimerManager(2);
+        const [a] = ids(manager);
+
+        expect(() => manager.moveTimer(a, 2)).to.throw(RangeError);
+        expect(() => manager.moveTimer(a, -1)).to.throw(RangeError);
+        expect(() => manager.moveTimer(a, 1.5)).to.throw(RangeError);
+      });
+
+      it('should persist the new order', () => {
+        const storage = new StorageService();
+        const manager = new TimerManager(3, storage);
+        const [a, b, c] = ids(manager);
+
+        manager.moveTimer(a, 2);
+
+        expect(storage.load().timers.map(t => t.id)).to.deep.equal([b, c, a]);
+      });
+
+      it('should not persist when the timer is already at the index', () => {
+        const storage = countingStorage();
+        const manager = new TimerManager(3, storage);
+        const [, b] = ids(manager);
+        const savesBefore = storage.saves.length;
+
+        expect(manager.moveTimer(b, 1)).to.be.true;
+
+        expect(storage.saves.length).to.equal(savesBefore);
+      });
+
+      it('should leave the running timer running', () => {
+        const manager = new TimerManager(3);
+        const [a, b] = ids(manager);
+        manager.startTimer(b);
+
+        manager.moveTimer(a, 2);
+
+        expect(manager.getRunningTimer().id).to.equal(b);
+        expect(manager.getTimer(b).isRunning()).to.be.true;
+        expect(manager.getAllTimers().filter(t => t.isRunning())).to.have.lengthOf(1);
+      });
+    });
+
+    describe('reorderTimers()', () => {
+      it('should apply a full permutation of the current ids', () => {
+        const manager = new TimerManager(3);
+        const [a, b, c] = ids(manager);
+
+        manager.reorderTimers([c, a, b]);
+
+        expect(ids(manager)).to.deep.equal([c, a, b]);
+      });
+
+      it('should throw for a non-array argument', () => {
+        const manager = new TimerManager(2);
+
+        expect(() => manager.reorderTimers('abc')).to.throw(TypeError);
+      });
+
+      it('should throw RangeError when ids are missing, unknown or duplicated', () => {
+        const manager = new TimerManager(3);
+        const [a, b, c] = ids(manager);
+
+        expect(() => manager.reorderTimers([a, b])).to.throw(RangeError);
+        expect(() => manager.reorderTimers([a, b, 'invalid-id'])).to.throw(RangeError);
+        expect(() => manager.reorderTimers([a, b, b])).to.throw(RangeError);
+        expect(ids(manager)).to.deep.equal([a, b, c]);
+      });
+
+      it('should persist the new order so a new manager loads it', () => {
+        const storage = new StorageService();
+        const manager = new TimerManager(3, storage);
+        const [a, b, c] = ids(manager);
+
+        manager.reorderTimers([b, c, a]);
+
+        expect(ids(new TimerManager(3, storage))).to.deep.equal([b, c, a]);
+      });
+
+      it('should not persist when the order is unchanged', () => {
+        const storage = countingStorage();
+        const manager = new TimerManager(3, storage);
+        const savesBefore = storage.saves.length;
+
+        manager.reorderTimers(ids(manager));
+
+        expect(storage.saves.length).to.equal(savesBefore);
+      });
+
+      it('should keep the running timer and its elapsed time intact', () => {
+        const manager = new TimerManager(3);
+        const [a, b, c] = ids(manager);
+        manager.getTimer(a).addMs(5000);
+        manager.startTimer(a);
+
+        manager.reorderTimers([c, b, a]);
+
+        expect(manager.getRunningTimer().id).to.equal(a);
+        expect(manager.getTimer(a).getElapsedMs()).to.be.at.least(5000);
+      });
+
+      it('should append new timers after the reordered ones', () => {
+        const manager = new TimerManager(3);
+        const [a, b, c] = ids(manager);
+
+        manager.reorderTimers([c, b, a]);
+        const added = manager.addTimer();
+
+        expect(ids(manager)).to.deep.equal([c, b, a, added.id]);
+      });
+    });
+  });
+
   describe('distributeTime()', () => {
     it('should accept a Map of timer ID to milliseconds', () => {
       const manager = new TimerManager(3);

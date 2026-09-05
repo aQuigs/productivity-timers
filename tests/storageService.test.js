@@ -156,6 +156,22 @@ describe('StorageService', () => {
       expect(loaded).to.deep.equal(state);
     });
 
+    it('should load a reordered timer list back in the same order', () => {
+      const state = {
+        timers: [
+          { id: 'ghi', title: 'Timer 3', elapsedMs: 0, state: 'stopped' },
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'paused' },
+          { id: 'def', title: 'Timer 2', elapsedMs: 5000, state: 'stopped' }
+        ],
+        runningTimerId: 'abc'
+      };
+
+      expect(storage.save(state)).to.be.true;
+      const loaded = storage.load();
+      expect(loaded.timers.map(t => t.id)).to.deep.equal(['ghi', 'abc', 'def']);
+      expect(loaded.runningTimerId).to.equal('abc');
+    });
+
     it('should return null when no data exists', () => {
       expect(storage.load()).to.be.null;
     });
