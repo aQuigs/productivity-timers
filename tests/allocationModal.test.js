@@ -172,6 +172,45 @@ describe('AllocationModal', () => {
       expect(strategy1.disabled).to.be.false;
     });
 
+    describe('strategy 1 label', () => {
+      const previousOptionText = (selector) => document
+        .querySelector('.allocation-modal input[value="previous-timer"]')
+        .closest('.strategy-option')
+        .querySelector(selector)
+        .textContent;
+
+      it('should name the timer that was running when the previous timer is known', () => {
+        const timers = [
+          { id: 'timer-1', title: 'Coding' },
+          { id: 'timer-2', title: 'Email' }
+        ];
+        modal = new AllocationModal(60000, timers, 'timer-2');
+        modal.show();
+
+        expect(previousOptionText('.strategy-name')).to.equal('Add all to “Email”');
+        expect(previousOptionText('.strategy-desc')).to.equal(
+          'Everything goes to the timer that was running when you stepped away.'
+        );
+      });
+
+      it('should fall back to generic copy when the previous timer is no longer in the list', () => {
+        const timers = [{ id: 'timer-1', title: 'Coding' }];
+        modal = new AllocationModal(60000, timers, 'timer-gone');
+        modal.show();
+
+        expect(previousOptionText('.strategy-name')).to.equal('Add all to the previous timer');
+      });
+
+      it('should say nothing was running when strategy 1 is disabled', () => {
+        const timers = [{ id: 'timer-1', title: 'Coding' }];
+        modal = new AllocationModal(60000, timers, null);
+        modal.show();
+
+        expect(previousOptionText('.strategy-name')).to.equal('Add all to the previous timer');
+        expect(previousOptionText('.strategy-desc')).to.equal('No timer was running when you stepped away.');
+      });
+    });
+
     it('should keep the "selected timer" option visible when another strategy is chosen', () => {
       const timers = [{ id: 'timer-1', title: 'Timer 1' }];
       modal = new AllocationModal(60000, timers, 'timer-1');
