@@ -186,8 +186,15 @@ describe('Timer', () => {
           id: 'abc-123',
           title: 'Test',
           elapsedMs: 0,
-          state: 'stopped'
+          state: 'stopped',
+          targetMs: null
         });
+      });
+
+      it('should serialize the target', () => {
+        const timer = new Timer('Test', 'abc-123');
+        timer.setTarget(1500000);
+        expect(timer.toJSON().targetMs).to.equal(1500000);
       });
 
       it('should serialize paused timer with elapsed time', (done) => {
@@ -355,6 +362,49 @@ describe('Timer', () => {
 
         expect(() => Timer.fromJSON(data)).to.throw(Error);
       });
+
+      it('should restore the target', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: 0,
+          state: 'stopped',
+          targetMs: 7200000
+        };
+
+        expect(Timer.fromJSON(data).targetMs).to.equal(7200000);
+      });
+
+      it('should load saved data without a target field as having no target', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: 0,
+          state: 'stopped'
+        };
+
+        expect(Timer.fromJSON(data).targetMs).to.be.null;
+      });
+
+      it('should load a null target as no target', () => {
+        const data = {
+          id: 'abc-123',
+          title: 'Restored',
+          elapsedMs: 0,
+          state: 'stopped',
+          targetMs: null
+        };
+
+        expect(Timer.fromJSON(data).targetMs).to.be.null;
+      });
+
+      it('should throw error for an invalid target', () => {
+        const base = { id: 'abc-123', title: 'Restored', elapsedMs: 0, state: 'stopped' };
+
+        expect(() => Timer.fromJSON({ ...base, targetMs: '25m' })).to.throw(Error);
+        expect(() => Timer.fromJSON({ ...base, targetMs: 0 })).to.throw(Error);
+        expect(() => Timer.fromJSON({ ...base, targetMs: -1000 })).to.throw(Error);
+      });
     });
 
     describe('Round-trip serialization', () => {
@@ -392,6 +442,76 @@ describe('Timer', () => {
         const restored = Timer.fromJSON(json);
 
         expect(restored.title).to.equal('Custom Timer Name');
+      });
+    });
+  });
+
+  describe('Target', () => {
+    it('should have no target by default', () => {
+      const timer = new Timer('Test');
+      expect(timer.targetMs).to.be.null;
+    });
+
+    it('should accept a positive integer target in milliseconds', () => {
+      const timer = new Timer('Test');
+      timer.setTarget(1500000);
+      expect(timer.targetMs).to.equal(1500000);
+    });
+
+    it('should accept null to clear the target', () => {
+      const timer = new Timer('Test');
+      timer.setTarget(1500000);
+      timer.setTarget(null);
+      expect(timer.targetMs).to.be.null;
+    });
+
+    it('should throw TypeError for a non-integer target', () => {
+      const timer = new Timer('Test');
+      expect(() => timer.setTarget('25m')).to.throw(TypeError);
+      expect(() => timer.setTarget(undefined)).to.throw(TypeError);
+      expect(() => timer.setTarget(NaN)).to.throw(TypeError);
+      expect(() => timer.setTarget(Infinity)).to.throw(TypeError);
+      expect(() => timer.setTarget(1500.5)).to.throw(TypeError);
+      expect(timer.targetMs).to.be.null;
+    });
+
+    it('should throw RangeError for a zero or negative target', () => {
+      const timer = new Timer('Test');
+      expect(() => timer.setTarget(0)).to.throw(RangeError);
+      expect(() => timer.setTarget(-1)).to.throw(RangeError);
+      expect(timer.targetMs).to.be.null;
+    });
+
+    it('should keep the target across a reset so the goal can be run again', () => {
+      const timer = new Timer('Test');
+      timer.setTarget(1500000);
+      timer.addMs(2000000);
+      timer.reset();
+      expect(timer.getElapsedMs()).to.equal(0);
+      expect(timer.targetMs).to.equal(1500000);
+    });
+
+    describe('hasReachedTarget()', () => {
+      it('should be false without a target', () => {
+        const timer = new Timer('Test');
+        timer.addMs(5000);
+        expect(timer.hasReachedTarget()).to.be.false;
+      });
+
+      it('should be false below the target', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(10000);
+        timer.addMs(9999);
+        expect(timer.hasReachedTarget()).to.be.false;
+      });
+
+      it('should be true at or beyond the target', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(10000);
+        timer.addMs(10000);
+        expect(timer.hasReachedTarget()).to.be.true;
+        timer.addMs(1);
+        expect(timer.hasReachedTarget()).to.be.true;
       });
     });
   });

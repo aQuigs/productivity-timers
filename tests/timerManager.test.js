@@ -265,6 +265,56 @@ describe('TimerManager', () => {
     });
   });
 
+  describe('Persistence - setTimerTarget()', () => {
+    it('should set the target and persist', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timerId = manager.getAllTimers()[0].id;
+
+      const result = manager.setTimerTarget(timerId, 1500000);
+
+      expect(result).to.be.true;
+      expect(manager.getTimer(timerId).targetMs).to.equal(1500000);
+      expect(storage.load().timers[0].targetMs).to.equal(1500000);
+    });
+
+    it('should clear the target with null and persist', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timerId = manager.getAllTimers()[0].id;
+      manager.setTimerTarget(timerId, 1500000);
+
+      manager.setTimerTarget(timerId, null);
+
+      expect(manager.getTimer(timerId).targetMs).to.be.null;
+      expect(storage.load().timers[0].targetMs).to.be.null;
+    });
+
+    it('should restore targets from storage on construction', () => {
+      const storage = new StorageService();
+      const first = new TimerManager(2, storage);
+      const timerId = first.getAllTimers()[0].id;
+      first.setTimerTarget(timerId, 7200000);
+
+      const second = new TimerManager(2, storage);
+
+      expect(second.getTimer(timerId).targetMs).to.equal(7200000);
+    });
+
+    it('should return false for invalid timer id', () => {
+      const manager = new TimerManager(2, new StorageService());
+      expect(manager.setTimerTarget('invalid-id', 1500000)).to.be.false;
+    });
+
+    it('should throw for an invalid target and leave the timer unchanged', () => {
+      const manager = new TimerManager(2, new StorageService());
+      const timerId = manager.getAllTimers()[0].id;
+
+      expect(() => manager.setTimerTarget(timerId, -5)).to.throw(RangeError);
+      expect(manager.getTimer(timerId).targetMs).to.be.null;
+    });
+  });
+
   describe('Persistence - resetTimer()', () => {
     it('should reset individual timer and persist', (done) => {
       const storage = new StorageService();
