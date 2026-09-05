@@ -12,6 +12,13 @@ const STATE_LABELS = {
   stopped: ''
 };
 
+const REORDER_KEY_DELTAS = {
+  ArrowLeft: -1,
+  ArrowUp: -1,
+  ArrowRight: 1,
+  ArrowDown: 1
+};
+
 /**
  * App module - Handles DOM initialization, rendering, and event binding
  */
@@ -27,6 +34,7 @@ export class App {
     this.lastDisplayedStates = new Map();
     this.lastDisplayedTotal = null;
     this.rafId = null;
+    this.draggingCard = null;
     this.allocationInProgress = false;
     this.idleThreshold = DEFAULT_IDLE_THRESHOLD_MS;
     this.hiddenRunningTimers = this.#loadHiddenRunningTimers();
@@ -120,6 +128,22 @@ export class App {
     const header = document.createElement('div');
     header.className = 'timer-header';
 
+    // A span rather than a <button>: Firefox refuses to start a drag from a form control
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'timer-drag-handle';
+    dragHandle.setAttribute('role', 'button');
+    dragHandle.tabIndex = 0;
+    dragHandle.title = 'Drag to reorder';
+    dragHandle.setAttribute('aria-label', 'Drag to reorder');
+    // The card is only draggable while the handle is held, otherwise dragging
+    // inside the title input would move the card instead of selecting text
+    dragHandle.addEventListener('pointerdown', () => { card.draggable = true; });
+    dragHandle.addEventListener('pointerup', () => { card.draggable = false; });
+    dragHandle.addEventListener('keydown', (e) => this.handleReorderKey(e, timer.id));
+
+    card.addEventListener('dragstart', (e) => this.handleDragStart(e, card));
+    card.addEventListener('dragend', (e) => this.handleDragEnd(e, card));
+
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.className = 'timer-title';
@@ -143,6 +167,7 @@ export class App {
     removeBtn.disabled = this.timerManager.getAllTimers().length <= 1;
     removeBtn.addEventListener('click', () => this.handleRemoveTimer(timer.id));
 
+    header.appendChild(dragHandle);
     header.appendChild(titleInput);
     header.appendChild(removeBtn);
 
@@ -214,6 +239,116 @@ export class App {
   bindGlobalEvents() {
     this.resetAllBtn.addEventListener('click', () => this.handleResetAll());
     this.addTimerBtn.addEventListener('click', () => this.handleAddTimer());
+    this.timerContainer.addEventListener('dragover', (e) => this.handleDragOver(e));
+    this.timerContainer.addEventListener('drop', (e) => this.handleDrop(e));
+  }
+
+  /**
+   * Begin dragging a card
+   * @param {DragEvent} event
+   * @param {HTMLElement} card
+   */
+  handleDragStart(event, card) {
+    // Text dragged out of the title input also fires dragstart, bubbling up from the input
+    if (event.target !== card) return;
+
+    this.draggingCard = card;
+    card.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    // Firefox only starts a drag once some data has been set
+    event.dataTransfer.setData('text/plain', card.dataset.timerId);
+  }
+
+  /**
+   * Move the dragged card relative to the card under the pointer
+   * @param {DragEvent} event
+   */
+  handleDragOver(event) {
+    const dragging = this.draggingCard;
+    if (!dragging) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+
+    const target = event.target.closest('.timer-card');
+    if (!target || target === dragging) return;
+
+    // Swapping with the card under the pointer leaves the pointer over the dragged
+    // card itself, so the grid settles instead of flickering between two positions
+    const targetIsEarlier = Boolean(target.compareDocumentPosition(dragging) & Node.DOCUMENT_POSITION_FOLLOWING);
+    if (targetIsEarlier) {
+      target.before(dragging);
+    } else {
+      target.after(dragging);
+    }
+  }
+
+  /**
+   * Accept the drop; the order is committed from the DOM
+   * @param {DragEvent} event
+   */
+  handleDrop(event) {
+    event.preventDefault();
+    this.commitCardOrder();
+  }
+
+  /**
+   * Finish a drag, whether it was dropped or cancelled
+   * @param {DragEvent} event
+   * @param {HTMLElement} card
+   */
+  handleDragEnd(event, card) {
+    if (event.target !== card) return;
+
+    card.classList.remove('dragging');
+    card.draggable = false;
+    this.draggingCard = null;
+    // A cancelled drag has already rearranged the DOM during dragover
+    this.commitCardOrder();
+  }
+
+  /**
+   * Apply the container's current card order to the TimerManager
+   */
+  commitCardOrder() {
+    const ids = Array.from(this.timerContainer.children, card => card.dataset.timerId);
+    this.timerManager.reorderTimers(ids);
+  }
+
+  /**
+   * Keyboard alternative to dragging: arrow keys move the timer one position
+   * @param {KeyboardEvent} event
+   * @param {string} timerId
+   */
+  handleReorderKey(event, timerId) {
+    const delta = REORDER_KEY_DELTAS[event.key];
+    if (!delta) return;
+
+    event.preventDefault();
+    this.moveTimerBy(timerId, delta);
+  }
+
+  /**
+   * Move a timer and its card one position, keeping focus on its handle
+   * @param {string} timerId
+   * @param {number} direction - 1 moves later, -1 earlier
+   */
+  moveTimerBy(timerId, direction) {
+    const timers = this.timerManager.getAllTimers();
+    const fromIndex = timers.findIndex(timer => timer.id === timerId);
+    const toIndex = fromIndex + direction;
+    if (fromIndex === -1 || toIndex < 0 || toIndex >= timers.length) return;
+
+    const card = this.timerElements.get(timerId);
+    if (direction < 0) {
+      card.previousElementSibling.before(card);
+    } else {
+      card.nextElementSibling.after(card);
+    }
+    this.timerManager.moveTimer(timerId, toIndex);
+
+    // Re-inserting the card drops focus onto the body
+    card.querySelector('.timer-drag-handle').focus();
   }
 
   /**

@@ -247,6 +247,61 @@ export class TimerManager {
   }
 
   /**
+   * Moves a timer to a new position, shifting the timers in between
+   * @param {string} id - ID of timer to move
+   * @param {number} toIndex - Target position in the timer list
+   * @returns {boolean} true if moved, false if timer not found
+   * @throws {RangeError} If toIndex is not a position in the current list
+   */
+  moveTimer(id, toIndex) {
+    const fromIndex = this.#timers.findIndex(timer => timer.id === id);
+    if (fromIndex === -1) {
+      return false;
+    }
+
+    if (!Number.isInteger(toIndex) || toIndex < 0 || toIndex >= this.#timers.length) {
+      throw new RangeError(`Index must be between 0 and ${this.#timers.length - 1}`);
+    }
+
+    if (fromIndex === toIndex) {
+      return true;
+    }
+
+    const [timer] = this.#timers.splice(fromIndex, 1);
+    this.#timers.splice(toIndex, 0, timer);
+    this.persist();
+    return true;
+  }
+
+  /**
+   * Replaces the timer order with the given sequence of IDs
+   * @param {string[]} orderedIds - Every current timer ID exactly once, in the new order
+   * @throws {TypeError} If orderedIds is not an array
+   * @throws {RangeError} If orderedIds is not a permutation of the current timer IDs
+   */
+  reorderTimers(orderedIds) {
+    if (!Array.isArray(orderedIds)) {
+      throw new TypeError('orderedIds must be an array of timer IDs');
+    }
+
+    const byId = new Map(this.#timers.map(timer => [timer.id, timer]));
+    const isPermutation = orderedIds.length === byId.size &&
+      new Set(orderedIds).size === orderedIds.length &&
+      orderedIds.every(id => byId.has(id));
+    if (!isPermutation) {
+      throw new RangeError('orderedIds must contain each current timer ID exactly once');
+    }
+
+    if (orderedIds.every((id, index) => this.#timers[index].id === id)) {
+      return;
+    }
+
+    // Reorder in place so arrays handed out by getAllTimers() stay current
+    this.#timers.splice(0, this.#timers.length, ...orderedIds.map(id => byId.get(id)));
+    this.persist();
+  }
+
+  /**
    * Distributes time allocations to timers
    * @param {Map<string, number>} allocations - Map of timer IDs to milliseconds
    * @returns {boolean} true if any allocation succeeded, false if all failed
