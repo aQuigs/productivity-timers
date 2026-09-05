@@ -38,6 +38,11 @@ export class AllocationModal {
     return this.modalElement.querySelector('input[name="strategy"]:checked').value;
   }
 
+  // Pre-select the option the user most likely wants; 'previous-timer' is disabled without a previous timer
+  #defaultStrategy() {
+    return this.previousRunningId ? 'previous-timer' : 'discard';
+  }
+
   #hhmmToMs(hours, minutes) {
     return (hours * 3600 + minutes * 60) * 1000;
   }
@@ -100,9 +105,7 @@ export class AllocationModal {
     radio.name = 'strategy';
     radio.value = value;
     radio.disabled = disabled;
-    if (value === 'discard') {
-      radio.checked = true;
-    }
+    radio.checked = value === this.#defaultStrategy();
     radio.addEventListener('change', () => this.#updateStrategyForms());
 
     const text = document.createElement('span');
