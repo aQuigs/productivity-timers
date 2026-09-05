@@ -142,6 +142,11 @@ npm test:debug        # Run tests in manual/debug mode
 npm run lint          # (Note: not configured; would need eslint/setup)
 ```
 
+## Pull Requests and Merging
+
+- **Never merge a PR while any CI check is failing**, including checks that GitHub does not mark as required (such as `deploy-preview`). A red check blocks the merge.
+- If a failure looks flaky (for example `deploy-preview` failing with `rsync ... exit code 24`, caused by a stale nested temp folder on the `gh-pages` branch), re-run the failed job with `gh run rerun <run-id> --failed` and wait for it to pass before merging. If it keeps failing, fix the cause first.
+
 ## Code Style
 
 **HTML5, CSS3, JavaScript (ES6+, vanilla - no framework):**
