@@ -12,6 +12,16 @@ export class Timer {
   #elapsedMs;
   #state;
   #startTimeMs;
+  #targetMs;
+
+  static #validateTarget(value) {
+    if (typeof value !== 'number' || !Number.isInteger(value)) {
+      throw new TypeError('Target must be null or an integer number of milliseconds');
+    }
+    if (value <= 0) {
+      throw new RangeError('Target must be positive');
+    }
+  }
 
   #validateTitle(value) {
     if (typeof value !== 'string') {
@@ -38,6 +48,7 @@ export class Timer {
     this.#elapsedMs = 0;
     this.#state = 'stopped';
     this.#startTimeMs = null;
+    this.#targetMs = null;
   }
 
   /**
@@ -82,6 +93,33 @@ export class Timer {
 
   set elapsedMs(value) {
     this.#elapsedMs = value;
+  }
+
+  /**
+   * Optional goal in milliseconds; null when the timer has no goal
+   */
+  get targetMs() {
+    return this.#targetMs;
+  }
+
+  /**
+   * Sets or clears the goal
+   * @param {number|null} ms - Positive integer milliseconds, or null for no goal
+   * @throws {TypeError} If ms is neither null nor an integer
+   * @throws {RangeError} If ms is not positive
+   */
+  setTarget(ms) {
+    if (ms !== null) {
+      Timer.#validateTarget(ms);
+    }
+    this.#targetMs = ms;
+  }
+
+  /**
+   * Whether elapsed time has met the goal; always false without a goal
+   */
+  hasReachedTarget() {
+    return this.#targetMs !== null && this.getElapsedMs() >= this.#targetMs;
   }
 
   /**
@@ -177,7 +215,8 @@ export class Timer {
       id: this.#id,
       title: this.#title,
       elapsedMs: currentElapsed,
-      state: normalizedState
+      state: normalizedState,
+      targetMs: this.#targetMs
     };
   }
 
@@ -214,6 +253,15 @@ export class Timer {
 
     const timer = new Timer(data.title, data.id);
     timer.#elapsedMs = data.elapsedMs;
+
+    // Absent in state saved before goals existed
+    if (data.targetMs !== undefined && data.targetMs !== null) {
+      try {
+        timer.setTarget(data.targetMs);
+      } catch (error) {
+        throw new Error('Timer data must have a valid targetMs');
+      }
+    }
 
     // Restore paused state; running is converted to paused since performance.now()
     // baseline cannot be restored across deserialization boundaries

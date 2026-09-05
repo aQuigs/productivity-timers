@@ -112,6 +112,49 @@ describe('StorageService', () => {
     });
   });
 
+  describe('Schema Extension - Timer Target', () => {
+    function stateWithTarget(targetMs) {
+      return {
+        timers: [
+          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped', targetMs }
+        ],
+        runningTimerId: null
+      };
+    }
+
+    it('should save and load a positive targetMs', () => {
+      expect(storage.save(stateWithTarget(1500000))).to.be.true;
+      expect(storage.load().timers[0].targetMs).to.equal(1500000);
+    });
+
+    it('should accept a null targetMs', () => {
+      expect(storage.validateState(stateWithTarget(null))).to.be.true;
+    });
+
+    it('should accept a timer without a targetMs field', () => {
+      const state = {
+        timers: [{ id: 'abc', title: 'Timer 1', elapsedMs: 0, state: 'stopped' }],
+        runningTimerId: null
+      };
+      expect(storage.validateState(state)).to.be.true;
+    });
+
+    it('should reject a non-numeric targetMs', () => {
+      expect(storage.validateState(stateWithTarget('25m'))).to.be.false;
+      expect(storage.validateState(stateWithTarget(true))).to.be.false;
+    });
+
+    it('should reject a zero or negative targetMs', () => {
+      expect(storage.validateState(stateWithTarget(0))).to.be.false;
+      expect(storage.validateState(stateWithTarget(-1000))).to.be.false;
+    });
+
+    it('should reject a non-finite targetMs', () => {
+      expect(storage.validateState(stateWithTarget(NaN))).to.be.false;
+      expect(storage.validateState(stateWithTarget(Infinity))).to.be.false;
+    });
+  });
+
   describe('Constructor', () => {
     it('should create a StorageService with default storage key', () => {
       expect(storage).to.be.instanceOf(StorageService);

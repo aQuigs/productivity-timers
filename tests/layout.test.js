@@ -53,6 +53,35 @@ describe('Layout and Overflow Tests', () => {
     display.className = 'timer-display';
     display.textContent = time;
 
+    const goal = document.createElement('div');
+    goal.className = 'timer-goal';
+
+    const goalBtn = document.createElement('button');
+    goalBtn.className = 'timer-goal-btn';
+    goalBtn.textContent = 'Set goal';
+
+    const goalInput = document.createElement('input');
+    goalInput.type = 'text';
+    goalInput.className = 'timer-goal-input';
+    goalInput.hidden = true;
+
+    const progress = document.createElement('div');
+    progress.className = 'timer-progress';
+    progress.hidden = true;
+
+    const progressBar = document.createElement('div');
+    progressBar.className = 'timer-progress-bar';
+    progress.appendChild(progressBar);
+
+    const goalError = document.createElement('p');
+    goalError.className = 'timer-goal-error';
+    goalError.hidden = true;
+
+    goal.appendChild(goalBtn);
+    goal.appendChild(goalInput);
+    goal.appendChild(goalError);
+    goal.appendChild(progress);
+
     const controls = document.createElement('div');
     controls.className = 'timer-controls';
 
@@ -64,9 +93,42 @@ describe('Layout and Overflow Tests', () => {
 
     card.appendChild(header);
     card.appendChild(display);
+    card.appendChild(goal);
     card.appendChild(controls);
 
     return card;
+  }
+
+  function createGoalCard(chipText = 'Goal 02:00:00') {
+    const card = createTestTimerCard();
+    const goalBtn = card.querySelector('.timer-goal-btn');
+    goalBtn.classList.add('is-set');
+    goalBtn.textContent = chipText;
+    card.querySelector('.timer-progress').hidden = false;
+    return card;
+  }
+
+  function createInvalidGoalCard() {
+    const card = createTestTimerCard();
+    card.querySelector('.timer-goal-btn').hidden = true;
+    const input = card.querySelector('.timer-goal-input');
+    input.hidden = false;
+    input.value = 'soon';
+    input.classList.add('is-invalid');
+    const error = card.querySelector('.timer-goal-error');
+    error.hidden = false;
+    error.textContent = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+    return card;
+  }
+
+  // Resolves a token like --danger to the rgb() string computed styles report
+  function computedToken(name) {
+    const probe = document.createElement('span');
+    probe.style.color = `var(${name})`;
+    document.body.appendChild(probe);
+    const color = window.getComputedStyle(probe).color;
+    probe.remove();
+    return color;
   }
 
   describe('Text overflow on small windows', () => {
@@ -309,6 +371,124 @@ describe('Layout and Overflow Tests', () => {
       expect(titleRect.right).to.be.at.most(removeRect.left);
       expect(titleRect.left).to.be.at.least(handleRect.right - 8);
       expect(handleRect.left).to.be.at.least(cardRect.left);
+    });
+  });
+
+  describe('Goal progress', () => {
+    it('should honour the hidden attribute on goal controls despite their display rules', () => {
+      const card = createTestTimerCard();
+      document.getElementById('timer-container').appendChild(card);
+      const goalBtn = card.querySelector('.timer-goal-btn');
+      goalBtn.hidden = true;
+
+      expect(window.getComputedStyle(goalBtn).display).to.equal('none');
+      expect(window.getComputedStyle(card.querySelector('.timer-goal-input')).display).to.equal('none');
+      expect(window.getComputedStyle(card.querySelector('.timer-progress')).display).to.equal('none');
+    });
+
+    it('should size the progress bar relative to its track', () => {
+      const card = createGoalCard();
+      document.getElementById('timer-container').appendChild(card);
+      const track = card.querySelector('.timer-progress');
+      const bar = card.querySelector('.timer-progress-bar');
+      bar.style.width = '50%';
+
+      const trackWidth = track.getBoundingClientRect().width;
+      const barWidth = bar.getBoundingClientRect().width;
+
+      expect(trackWidth).to.be.greaterThan(100);
+      expect(Math.abs(barWidth - trackWidth / 2)).to.be.lessThan(1);
+    });
+
+    it('should keep the track thin so it reads as progress, not as a control', () => {
+      const card = createGoalCard();
+      document.getElementById('timer-container').appendChild(card);
+
+      const height = card.querySelector('.timer-progress').getBoundingClientRect().height;
+      expect(height).to.be.at.least(2);
+      expect(height).to.be.at.most(8);
+    });
+
+    it('should switch the bar colour when the card is over target', () => {
+      const timerContainer = document.getElementById('timer-container');
+      const underTarget = createGoalCard();
+      const overTarget = createGoalCard('Goal 02:00:00 · reached');
+      overTarget.classList.add('over-target');
+      timerContainer.appendChild(underTarget);
+      timerContainer.appendChild(overTarget);
+
+      const underColor = window.getComputedStyle(underTarget.querySelector('.timer-progress-bar')).backgroundColor;
+      const overColor = window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor;
+
+      expect(overColor).to.not.equal(underColor);
+      expect(overColor).to.not.equal('rgba(0, 0, 0, 0)');
+    });
+
+    it('should style the reached chip differently from a pending chip', () => {
+      const timerContainer = document.getElementById('timer-container');
+      const pending = createGoalCard();
+      const reached = createGoalCard('Goal 02:00:00 · reached');
+      reached.classList.add('over-target');
+      timerContainer.appendChild(pending);
+      timerContainer.appendChild(reached);
+
+      const pendingColor = window.getComputedStyle(pending.querySelector('.timer-goal-btn')).color;
+      const reachedColor = window.getComputedStyle(reached.querySelector('.timer-goal-btn')).color;
+
+      expect(reachedColor).to.not.equal(pendingColor);
+    });
+
+    it('should show the chip in tabular numerals', () => {
+      const card = createGoalCard();
+      document.getElementById('timer-container').appendChild(card);
+
+      const styles = window.getComputedStyle(card.querySelector('.timer-goal-btn'));
+      expect(styles.fontVariantNumeric).to.include('tabular-nums');
+    });
+
+    it('should outline an invalid goal input in the danger colour and show the message', () => {
+      const card = createInvalidGoalCard();
+      document.getElementById('timer-container').appendChild(card);
+      const danger = computedToken('--danger');
+
+      const inputStyles = window.getComputedStyle(card.querySelector('.timer-goal-input'));
+      const error = card.querySelector('.timer-goal-error');
+      const errorStyles = window.getComputedStyle(error);
+
+      expect(danger).to.match(/^rgb/);
+      expect(inputStyles.borderTopColor).to.equal(danger);
+      expect(errorStyles.display).to.not.equal('none');
+      expect(error.getBoundingClientRect().height).to.be.greaterThan(0);
+      expect(errorStyles.color).to.equal(danger);
+    });
+
+    it('should wrap the error message inside the card on a narrow layout', () => {
+      const card = createInvalidGoalCard();
+      const timerContainer = document.getElementById('timer-container');
+      timerContainer.style.width = '220px';
+      timerContainer.appendChild(card);
+
+      const cardRect = card.getBoundingClientRect();
+      const errorRect = card.querySelector('.timer-goal-error').getBoundingClientRect();
+
+      expect(errorRect.right).to.be.at.most(cardRect.right + 1);
+      expect(errorRect.left).to.be.at.least(cardRect.left - 1);
+      expect(errorRect.height).to.be.greaterThan(errorRect.width / 8, 'message should wrap onto more than one line');
+    });
+
+    it('should keep the chip and input inside the card on a narrow layout', () => {
+      const card = createGoalCard('Goal 125:00:00 · reached');
+      card.querySelector('.timer-goal-input').hidden = false;
+      const timerContainer = document.getElementById('timer-container');
+      timerContainer.style.width = '250px';
+      timerContainer.appendChild(card);
+
+      const cardRect = card.getBoundingClientRect();
+      ['.timer-goal-btn', '.timer-goal-input', '.timer-progress'].forEach(selector => {
+        const rect = card.querySelector(selector).getBoundingClientRect();
+        expect(rect.right).to.be.at.most(cardRect.right + 1, `${selector} should stay inside the card`);
+        expect(rect.left).to.be.at.least(cardRect.left - 1, `${selector} should stay inside the card`);
+      });
     });
   });
 

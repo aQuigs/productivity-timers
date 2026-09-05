@@ -3,8 +3,12 @@ import IdleDetector, { DEFAULT_IDLE_THRESHOLD_MS } from './idleDetector.js';
 import AllocationModal from './allocationModal.js';
 import { allocateToSingle, allocateDiscard, allocateFixed, allocatePercentage } from './timeDistributor.js';
 import { formatDuration } from './formatDuration.js';
+import { parseDuration } from './parseDuration.js';
+import { createNotifier } from './notifier.js';
 
 const HIDDEN_RUNNING_TIMERS_KEY = 'app_hidden_running_timers';
+const GOAL_PLACEHOLDER = '25m, 2h, 1:30';
+const GOAL_ERROR_MESSAGE = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
 
 const STATE_LABELS = {
   running: 'Running',
@@ -23,8 +27,14 @@ const REORDER_KEY_DELTAS = {
  * App module - Handles DOM initialization, rendering, and event binding
  */
 export class App {
-  constructor() {
+  /**
+   * @param {Object} [options]
+   * @param {{ requestPermission: Function, notify: Function }} [options.notifier] - Replaces the
+   *   browser Notification wrapper (tests inject a fake)
+   */
+  constructor({ notifier } = {}) {
     this.timerManager = new TimerManager();
+    this.notifier = notifier || createNotifier();
     this.timerContainer = document.getElementById('timer-container');
     this.resetAllBtn = document.getElementById('reset-all-btn');
     this.addTimerBtn = document.getElementById('add-timer-btn');
@@ -32,6 +42,10 @@ export class App {
     this.timerElements = new Map();
     this.lastDisplayedValues = new Map();
     this.lastDisplayedStates = new Map();
+    this.lastDisplayedGoals = new Map();
+    // Timers currently at or past their goal; a crossing notifies once until the
+    // timer drops back below (reset, or a goal raised above the elapsed time)
+    this.goalReachedTimers = new Set();
     this.lastDisplayedTotal = null;
     this.rafId = null;
     this.draggingCard = null;
@@ -98,6 +112,8 @@ export class App {
     this.timerElements.clear();
     this.lastDisplayedValues.clear();
     this.lastDisplayedStates.clear();
+    this.lastDisplayedGoals.clear();
+    this.goalReachedTimers.clear();
 
     const timers = this.timerManager.getAllTimers();
     timers.forEach(timer => {
@@ -113,6 +129,53 @@ export class App {
   #trackCard(timer, card) {
     this.timerElements.set(timer.id, card);
     this.lastDisplayedValues.set(timer.id, timer.getFormattedTime());
+    // A timer restored past its goal was already announced before the reload
+    this.#syncGoalReached(timer, timer.hasReachedTarget(), false);
+  }
+
+  #forgetCard(timerId) {
+    this.timerElements.delete(timerId);
+    this.lastDisplayedValues.delete(timerId);
+    this.lastDisplayedStates.delete(timerId);
+    this.lastDisplayedGoals.delete(timerId);
+    this.goalReachedTimers.delete(timerId);
+  }
+
+  /**
+   * Keeps goalReachedTimers in step with the timer and notifies on a fresh crossing
+   * @param {Timer} timer
+   * @param {boolean} reached
+   * @param {boolean} notify - false when the state is being adopted rather than crossed
+   */
+  #syncGoalReached(timer, reached, notify) {
+    if (!reached) {
+      this.goalReachedTimers.delete(timer.id);
+      return;
+    }
+    if (this.goalReachedTimers.has(timer.id)) {
+      return;
+    }
+
+    this.goalReachedTimers.add(timer.id);
+    if (notify) {
+      this.notifier.notify('Goal reached', `${timer.title} hit ${formatDuration(timer.targetMs)}`);
+    }
+  }
+
+  #goalProgress(timer, elapsedMs) {
+    const target = timer.targetMs;
+    if (target === null) {
+      return { target, percent: 0, reached: false };
+    }
+    return {
+      target,
+      percent: Math.min(100, Math.floor((elapsedMs / target) * 100)),
+      reached: elapsedMs >= target
+    };
+  }
+
+  #goalKey({ target, percent, reached }) {
+    return `${target}:${percent}:${reached}`;
   }
 
   /**
@@ -175,6 +238,64 @@ export class App {
     display.className = 'timer-display';
     display.textContent = timer.getFormattedTime();
 
+    const goal = document.createElement('div');
+    goal.className = 'timer-goal';
+
+    const goalBtn = document.createElement('button');
+    goalBtn.type = 'button';
+    goalBtn.className = 'timer-goal-btn';
+    goalBtn.addEventListener('click', () => this.openGoalEditor(card, timer));
+
+    const goalInput = document.createElement('input');
+    goalInput.type = 'text';
+    goalInput.className = 'timer-goal-input';
+    goalInput.placeholder = GOAL_PLACEHOLDER;
+    goalInput.spellcheck = false;
+    goalInput.hidden = true;
+    goalInput.setAttribute('aria-label', 'Goal duration');
+    goalInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // Unreadable text keeps the editor open, so focus must stay where the fix is typed
+        if (this.commitGoalEdit(card, timer)) {
+          goalBtn.focus();
+        }
+      } else if (e.key === 'Escape') {
+        this.closeGoalEditor(card);
+        goalBtn.focus();
+      }
+    });
+    goalInput.addEventListener('input', () => this.#clearGoalError(card));
+    goalInput.addEventListener('blur', () => {
+      // Enter and Escape hide the input before focus moves, so this only commits
+      // when the user clicked or tabbed away
+      if (!goalInput.hidden) {
+        this.commitGoalEdit(card, timer);
+      }
+    });
+
+    const goalError = document.createElement('p');
+    goalError.className = 'timer-goal-error';
+    goalError.id = `goal-error-${timer.id}`;
+    goalError.setAttribute('role', 'alert');
+    goalError.hidden = true;
+
+    const progress = document.createElement('div');
+    progress.className = 'timer-progress';
+    progress.setAttribute('role', 'progressbar');
+    progress.setAttribute('aria-label', 'Progress toward goal');
+    progress.setAttribute('aria-valuemin', '0');
+    progress.setAttribute('aria-valuemax', '100');
+
+    const progressBar = document.createElement('div');
+    progressBar.className = 'timer-progress-bar';
+    progress.appendChild(progressBar);
+
+    goal.appendChild(goalBtn);
+    goal.appendChild(goalInput);
+    goal.appendChild(goalError);
+    goal.appendChild(progress);
+
     const controls = document.createElement('div');
     controls.className = 'timer-controls';
 
@@ -191,9 +312,11 @@ export class App {
 
     card.appendChild(header);
     card.appendChild(display);
+    card.appendChild(goal);
     card.appendChild(controls);
 
     this.applyTimerState(card, timer);
+    this.applyGoalState(card, timer);
 
     return card;
   }
@@ -217,6 +340,127 @@ export class App {
 
     card.classList.toggle('active', running);
     this.lastDisplayedStates.set(timer.id, timer.state);
+  }
+
+  /**
+   * Syncs a card's goal chip, progress bar and reached visuals with its timer
+   * @param {HTMLElement} card
+   * @param {Timer} timer
+   * @param {{target: number|null, percent: number, reached: boolean}} [progress]
+   */
+  applyGoalState(card, timer, progress = this.#goalProgress(timer, timer.getElapsedMs())) {
+    const { target, percent, reached } = progress;
+    const hasGoal = target !== null;
+
+    const goalBtn = card.querySelector('.timer-goal-btn');
+    goalBtn.classList.toggle('is-set', hasGoal);
+    goalBtn.textContent = hasGoal
+      ? `Goal ${formatDuration(target)}${reached ? ' · reached' : ''}`
+      : 'Set goal';
+    goalBtn.title = hasGoal ? 'Edit goal' : 'Set a goal for this timer';
+
+    const progressEl = card.querySelector('.timer-progress');
+    progressEl.hidden = !hasGoal;
+    progressEl.setAttribute('aria-valuenow', String(percent));
+    card.querySelector('.timer-progress-bar').style.width = `${percent}%`;
+
+    card.classList.toggle('over-target', reached);
+    this.lastDisplayedGoals.set(timer.id, this.#goalKey(progress));
+  }
+
+  /**
+   * Swap the goal chip for an input prefilled with the current goal
+   * @param {HTMLElement} card
+   * @param {Timer} timer
+   */
+  openGoalEditor(card, timer) {
+    const goalBtn = card.querySelector('.timer-goal-btn');
+    const goalInput = card.querySelector('.timer-goal-input');
+
+    goalInput.value = timer.targetMs === null ? '' : formatDuration(timer.targetMs);
+    goalBtn.hidden = true;
+    goalInput.hidden = false;
+    goalInput.focus();
+    goalInput.select();
+  }
+
+  /**
+   * Hide the goal input and show the chip again without applying anything
+   * @param {HTMLElement} card
+   */
+  closeGoalEditor(card) {
+    this.#clearGoalError(card);
+    card.querySelector('.timer-goal-input').hidden = true;
+    card.querySelector('.timer-goal-btn').hidden = false;
+  }
+
+  #showGoalError(card) {
+    const goalInput = card.querySelector('.timer-goal-input');
+    const goalError = card.querySelector('.timer-goal-error');
+
+    goalInput.classList.add('is-invalid');
+    goalInput.setAttribute('aria-invalid', 'true');
+    goalInput.setAttribute('aria-describedby', goalError.id);
+    // Filling the alert's text here, rather than at build time, is what makes
+    // screen readers announce it
+    goalError.textContent = GOAL_ERROR_MESSAGE;
+    goalError.hidden = false;
+  }
+
+  #clearGoalError(card) {
+    const goalInput = card.querySelector('.timer-goal-input');
+    const goalError = card.querySelector('.timer-goal-error');
+
+    goalInput.classList.remove('is-invalid');
+    goalInput.removeAttribute('aria-invalid');
+    goalInput.removeAttribute('aria-describedby');
+    goalError.textContent = '';
+    goalError.hidden = true;
+  }
+
+  /**
+   * Apply whatever is in the goal input and close the editor; unreadable text
+   * instead keeps the editor open with an error
+   * @param {HTMLElement} card
+   * @param {Timer} timer
+   * @returns {boolean} true if the editor was closed
+   */
+  commitGoalEdit(card, timer) {
+    const applied = this.handleGoalChange(timer, card.querySelector('.timer-goal-input').value);
+    if (!applied) {
+      this.#showGoalError(card);
+      return false;
+    }
+
+    this.closeGoalEditor(card);
+    this.applyGoalState(card, timer);
+    return true;
+  }
+
+  /**
+   * Handle goal text entered by the user: empty clears the goal
+   * @param {Timer} timer
+   * @param {string} text
+   * @returns {boolean} false when the text could not be read, leaving the goal unchanged
+   */
+  handleGoalChange(timer, text) {
+    const trimmed = text.trim();
+
+    if (trimmed.length === 0) {
+      this.timerManager.setTimerTarget(timer.id, null);
+    } else {
+      const targetMs = parseDuration(trimmed);
+      if (targetMs === null) {
+        return false;
+      }
+      this.timerManager.setTimerTarget(timer.id, targetMs);
+      // Asking here, on the user's own action, is what browsers expect
+      this.notifier.requestPermission();
+    }
+
+    // A goal set below the elapsed time was never crossed, so adopt it silently
+    this.#syncGoalReached(timer, timer.hasReachedTarget(), false);
+    return true;
   }
 
   /**
@@ -371,7 +615,8 @@ export class App {
     let runningTimerTicked = false;
 
     timers.forEach(timer => {
-      totalMs += timer.getElapsedMs();
+      const elapsedMs = timer.getElapsedMs();
+      totalMs += elapsedMs;
 
       const card = this.timerElements.get(timer.id);
       if (!card) return;
@@ -387,6 +632,12 @@ export class App {
 
       if (timer.state !== this.lastDisplayedStates.get(timer.id)) {
         this.applyTimerState(card, timer);
+      }
+
+      const progress = this.#goalProgress(timer, elapsedMs);
+      this.#syncGoalReached(timer, progress.reached, true);
+      if (this.#goalKey(progress) !== this.lastDisplayedGoals.get(timer.id)) {
+        this.applyGoalState(card, timer, progress);
       }
     });
 
@@ -479,9 +730,7 @@ export class App {
       const card = this.timerElements.get(timerId);
       if (card) {
         card.remove();
-        this.timerElements.delete(timerId);
-        this.lastDisplayedValues.delete(timerId);
-        this.lastDisplayedStates.delete(timerId);
+        this.#forgetCard(timerId);
       }
 
       this.updateRemoveButtons();
