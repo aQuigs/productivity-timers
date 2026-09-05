@@ -812,19 +812,6 @@ describe('App', () => {
         expect(new TimerManager().getTimer(timer.id).targetMs).to.be.null;
       });
 
-      it('should keep the previous goal when the input is not a valid duration', () => {
-        createApp({ notifier });
-        const card = firstCard();
-        const timer = app.timerManager.getAllTimers()[0];
-        enterGoal(card, '25m');
-
-        enterGoal(card, 'soon');
-
-        expect(timer.targetMs).to.equal(25 * 60 * 1000);
-        expect(goalInput(card).hidden).to.be.true;
-        expect(goalButton(card).textContent).to.equal('Goal 00:25:00');
-      });
-
       it('should render the chip and progress bar for a goal restored from storage', () => {
         const seed = new TimerManager();
         const timerId = seed.getAllTimers()[1].id;
@@ -835,6 +822,128 @@ describe('App', () => {
 
         expect(goalButton(card).textContent).to.equal('Goal 02:00:00');
         expect(progress(card).hidden).to.be.false;
+      });
+    });
+
+    describe('unreadable input', () => {
+      const ERROR_MESSAGE = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+
+      function goalError(card) {
+        return card.querySelector('.timer-goal-error');
+      }
+
+      function expectInvalid(card) {
+        const input = goalInput(card);
+        const error = goalError(card);
+        expect(input.hidden).to.be.false;
+        expect(input.classList.contains('is-invalid')).to.be.true;
+        expect(input.getAttribute('aria-invalid')).to.equal('true');
+        expect(error.hidden).to.be.false;
+        expect(error.textContent).to.equal(ERROR_MESSAGE);
+        expect(error.getAttribute('role')).to.equal('alert');
+        expect(error.id).to.be.a('string').that.is.not.empty;
+        expect(input.getAttribute('aria-describedby')).to.equal(error.id);
+      }
+
+      function expectValid(card) {
+        const input = goalInput(card);
+        expect(input.classList.contains('is-invalid')).to.be.false;
+        expect(input.hasAttribute('aria-invalid')).to.be.false;
+        expect(input.hasAttribute('aria-describedby')).to.be.false;
+        expect(goalError(card).hidden).to.be.true;
+      }
+
+      it('should build the error element into the card, hidden and inside the goal block', () => {
+        createApp({ notifier });
+        const card = firstCard();
+
+        const error = goalError(card);
+        expect(error).to.not.be.null;
+        expect(error.hidden).to.be.true;
+        expect(error.closest('.timer-goal')).to.not.be.null;
+      });
+
+      it('should keep the editor open with an error on Enter and leave the goal alone', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '25m');
+
+        enterGoal(card, 'soon');
+
+        expectInvalid(card);
+        expect(goalInput(card).value).to.equal('soon');
+        expect(goalButton(card).hidden).to.be.true;
+        expect(timer.targetMs).to.equal(25 * 60 * 1000);
+        expect(notifier.requests).to.equal(1);
+      });
+
+      it('should keep focus in the input without selecting the text on an invalid Enter', () => {
+        createApp({ notifier });
+        const card = firstCard();
+
+        enterGoal(card, 'soon');
+
+        const input = goalInput(card);
+        expect(document.activeElement.classList.contains('timer-goal-input')).to.be.true;
+        expect(input.selectionStart).to.equal(input.selectionEnd);
+      });
+
+      it('should keep the editor open with an error when the input blurs with unreadable text', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+
+        goalButton(card).click();
+        goalInput(card).value = 'soon';
+        goalInput(card).dispatchEvent(new Event('blur'));
+
+        expectInvalid(card);
+        expect(goalInput(card).value).to.equal('soon');
+        expect(timer.targetMs).to.be.null;
+        expect(notifier.requests).to.equal(0);
+      });
+
+      it('should clear the error as soon as the user types again', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        enterGoal(card, 'soon');
+
+        goalInput(card).value = 'soo';
+        goalInput(card).dispatchEvent(new Event('input'));
+
+        expectValid(card);
+        expect(goalInput(card).hidden).to.be.false;
+      });
+
+      it('should close the editor and clear the error on Escape', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, 'soon');
+
+        keydown(goalInput(card), 'Escape');
+
+        expectValid(card);
+        expect(goalInput(card).hidden).to.be.true;
+        expect(goalButton(card).hidden).to.be.false;
+        expect(timer.targetMs).to.be.null;
+      });
+
+      it('should set the goal and clear the error when valid text follows an invalid attempt', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, 'soon');
+
+        goalInput(card).value = '25m';
+        keydown(goalInput(card), 'Enter');
+
+        expectValid(card);
+        expect(goalInput(card).hidden).to.be.true;
+        expect(timer.targetMs).to.equal(25 * 60 * 1000);
+        expect(goalButton(card).textContent).to.equal('Goal 00:25:00');
+        expect(notifier.requests).to.equal(1);
       });
     });
 

@@ -123,7 +123,7 @@ When a user starts timer B while timer A is running:
 
 **Goals:**
 - `Timer.targetMs` (`null` = none) is set through `TimerManager.setTimerTarget(id, ms)`, persisted with the timer (absent in old saves loads as `null`) and survives `reset()`
-- The card's `.timer-goal-btn` ("Set goal" or the `Goal HH:MM:SS` chip) swaps for `.timer-goal-input`; Enter/blur apply via `parseDuration`, Escape cancels, empty clears, unparseable text keeps the old goal. `applyGoalState()` alone syncs chip, `.timer-progress-bar` width and the card's `over-target` class, and the RAF loop calls it only when the whole-number percentage or reached flag changes
+- The card's `.timer-goal-btn` ("Set goal" or the `Goal HH:MM:SS` chip) swaps for `.timer-goal-input`; Enter/blur apply via `parseDuration`, Escape cancels, empty clears, unparseable text keeps the editor open with the input flagged `is-invalid`/`aria-invalid` and a `.timer-goal-error` alert (cleared on input, Escape or a valid commit). `applyGoalState()` alone syncs chip, `.timer-progress-bar` width and the card's `over-target` class, and the RAF loop calls it only when the whole-number percentage or reached flag changes
 - `goalReachedTimers` mirrors "currently at/over goal": a crossing seen on the display tick calls `notifier.notify()` once, and dropping below (reset, raised goal) re-arms it; cards rendered already over goal and goals set below the elapsed time are adopted silently. `notifier.requestPermission()` runs only when the user sets a goal
 
 **Persistence:**

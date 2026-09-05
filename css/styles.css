@@ -578,6 +578,22 @@ button {
     color: var(--text-3);
 }
 
+.timer-goal-input.is-invalid {
+    border-color: var(--danger);
+}
+
+.timer-goal-input.is-invalid:focus {
+    box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.timer-goal-error {
+    margin-top: -4px;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--danger);
+    overflow-wrap: anywhere;
+}
+
 .timer-progress {
     height: 4px;
     border-radius: 999px;

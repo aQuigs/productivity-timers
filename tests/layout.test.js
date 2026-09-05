@@ -73,8 +73,13 @@ describe('Layout and Overflow Tests', () => {
     progressBar.className = 'timer-progress-bar';
     progress.appendChild(progressBar);
 
+    const goalError = document.createElement('p');
+    goalError.className = 'timer-goal-error';
+    goalError.hidden = true;
+
     goal.appendChild(goalBtn);
     goal.appendChild(goalInput);
+    goal.appendChild(goalError);
     goal.appendChild(progress);
 
     const controls = document.createElement('div');
@@ -101,6 +106,29 @@ describe('Layout and Overflow Tests', () => {
     goalBtn.textContent = chipText;
     card.querySelector('.timer-progress').hidden = false;
     return card;
+  }
+
+  function createInvalidGoalCard() {
+    const card = createTestTimerCard();
+    card.querySelector('.timer-goal-btn').hidden = true;
+    const input = card.querySelector('.timer-goal-input');
+    input.hidden = false;
+    input.value = 'soon';
+    input.classList.add('is-invalid');
+    const error = card.querySelector('.timer-goal-error');
+    error.hidden = false;
+    error.textContent = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+    return card;
+  }
+
+  // Resolves a token like --danger to the rgb() string computed styles report
+  function computedToken(name) {
+    const probe = document.createElement('span');
+    probe.style.color = `var(${name})`;
+    document.body.appendChild(probe);
+    const color = window.getComputedStyle(probe).color;
+    probe.remove();
+    return color;
   }
 
   describe('Text overflow on small windows', () => {
@@ -416,6 +444,36 @@ describe('Layout and Overflow Tests', () => {
 
       const styles = window.getComputedStyle(card.querySelector('.timer-goal-btn'));
       expect(styles.fontVariantNumeric).to.include('tabular-nums');
+    });
+
+    it('should outline an invalid goal input in the danger colour and show the message', () => {
+      const card = createInvalidGoalCard();
+      document.getElementById('timer-container').appendChild(card);
+      const danger = computedToken('--danger');
+
+      const inputStyles = window.getComputedStyle(card.querySelector('.timer-goal-input'));
+      const error = card.querySelector('.timer-goal-error');
+      const errorStyles = window.getComputedStyle(error);
+
+      expect(danger).to.match(/^rgb/);
+      expect(inputStyles.borderTopColor).to.equal(danger);
+      expect(errorStyles.display).to.not.equal('none');
+      expect(error.getBoundingClientRect().height).to.be.greaterThan(0);
+      expect(errorStyles.color).to.equal(danger);
+    });
+
+    it('should wrap the error message inside the card on a narrow layout', () => {
+      const card = createInvalidGoalCard();
+      const timerContainer = document.getElementById('timer-container');
+      timerContainer.style.width = '220px';
+      timerContainer.appendChild(card);
+
+      const cardRect = card.getBoundingClientRect();
+      const errorRect = card.querySelector('.timer-goal-error').getBoundingClientRect();
+
+      expect(errorRect.right).to.be.at.most(cardRect.right + 1);
+      expect(errorRect.left).to.be.at.least(cardRect.left - 1);
+      expect(errorRect.height).to.be.greaterThan(errorRect.width / 8, 'message should wrap onto more than one line');
     });
 
     it('should keep the chip and input inside the card on a narrow layout', () => {

@@ -8,6 +8,7 @@ import { createNotifier } from './notifier.js';
 
 const HIDDEN_RUNNING_TIMERS_KEY = 'app_hidden_running_timers';
 const GOAL_PLACEHOLDER = '25m, 2h, 1:30';
+const GOAL_ERROR_MESSAGE = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
 
 const STATE_LABELS = {
   running: 'Running',
@@ -255,13 +256,16 @@ export class App {
     goalInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        this.commitGoalEdit(card, timer);
-        goalBtn.focus();
+        // Unreadable text keeps the editor open, so focus must stay where the fix is typed
+        if (this.commitGoalEdit(card, timer)) {
+          goalBtn.focus();
+        }
       } else if (e.key === 'Escape') {
         this.closeGoalEditor(card);
         goalBtn.focus();
       }
     });
+    goalInput.addEventListener('input', () => this.#clearGoalError(card));
     goalInput.addEventListener('blur', () => {
       // Enter and Escape hide the input before focus moves, so this only commits
       // when the user clicked or tabbed away
@@ -269,6 +273,12 @@ export class App {
         this.commitGoalEdit(card, timer);
       }
     });
+
+    const goalError = document.createElement('p');
+    goalError.className = 'timer-goal-error';
+    goalError.id = `goal-error-${timer.id}`;
+    goalError.setAttribute('role', 'alert');
+    goalError.hidden = true;
 
     const progress = document.createElement('div');
     progress.className = 'timer-progress';
@@ -283,6 +293,7 @@ export class App {
 
     goal.appendChild(goalBtn);
     goal.appendChild(goalInput);
+    goal.appendChild(goalError);
     goal.appendChild(progress);
 
     const controls = document.createElement('div');
@@ -378,25 +389,59 @@ export class App {
    * @param {HTMLElement} card
    */
   closeGoalEditor(card) {
+    this.#clearGoalError(card);
     card.querySelector('.timer-goal-input').hidden = true;
     card.querySelector('.timer-goal-btn').hidden = false;
   }
 
-  /**
-   * Apply whatever is in the goal input, then close the editor
-   * @param {HTMLElement} card
-   * @param {Timer} timer
-   */
-  commitGoalEdit(card, timer) {
-    this.handleGoalChange(timer, card.querySelector('.timer-goal-input').value);
-    this.closeGoalEditor(card);
-    this.applyGoalState(card, timer);
+  #showGoalError(card) {
+    const goalInput = card.querySelector('.timer-goal-input');
+    const goalError = card.querySelector('.timer-goal-error');
+
+    goalInput.classList.add('is-invalid');
+    goalInput.setAttribute('aria-invalid', 'true');
+    goalInput.setAttribute('aria-describedby', goalError.id);
+    // Filling the alert's text here, rather than at build time, is what makes
+    // screen readers announce it
+    goalError.textContent = GOAL_ERROR_MESSAGE;
+    goalError.hidden = false;
+  }
+
+  #clearGoalError(card) {
+    const goalInput = card.querySelector('.timer-goal-input');
+    const goalError = card.querySelector('.timer-goal-error');
+
+    goalInput.classList.remove('is-invalid');
+    goalInput.removeAttribute('aria-invalid');
+    goalInput.removeAttribute('aria-describedby');
+    goalError.textContent = '';
+    goalError.hidden = true;
   }
 
   /**
-   * Handle goal text entered by the user: empty clears, unparseable leaves it unchanged
+   * Apply whatever is in the goal input and close the editor; unreadable text
+   * instead keeps the editor open with an error
+   * @param {HTMLElement} card
+   * @param {Timer} timer
+   * @returns {boolean} true if the editor was closed
+   */
+  commitGoalEdit(card, timer) {
+    const applied = this.handleGoalChange(timer, card.querySelector('.timer-goal-input').value);
+    if (!applied) {
+      this.#showGoalError(card);
+      return false;
+    }
+
+    this.closeGoalEditor(card);
+    this.applyGoalState(card, timer);
+    return true;
+  }
+
+  /**
+   * Handle goal text entered by the user: empty clears the goal
    * @param {Timer} timer
    * @param {string} text
+   * @returns {boolean} false when the text could not be read, leaving the goal unchanged
    */
   handleGoalChange(timer, text) {
     const trimmed = text.trim();
@@ -406,7 +451,7 @@ export class App {
     } else {
       const targetMs = parseDuration(trimmed);
       if (targetMs === null) {
-        return;
+        return false;
       }
       this.timerManager.setTimerTarget(timer.id, targetMs);
       // Asking here, on the user's own action, is what browsers expect
@@ -415,6 +460,7 @@ export class App {
 
     // A goal set below the elapsed time was never crossed, so adopt it silently
     this.#syncGoalReached(timer, timer.hasReachedTarget(), false);
+    return true;
   }
 
   /**
