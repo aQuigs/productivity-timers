@@ -257,6 +257,61 @@ describe('Layout and Overflow Tests', () => {
     });
   });
 
+  describe('Drag handle', () => {
+    function addHandle(card) {
+      const handle = document.createElement('span');
+      handle.className = 'timer-drag-handle';
+      handle.setAttribute('role', 'button');
+      handle.tabIndex = 0;
+      card.querySelector('.timer-header').prepend(handle);
+      return handle;
+    }
+
+    it('should be at least 36px tall and show a grab cursor', () => {
+      const card = createTestTimerCard();
+      const handle = addHandle(card);
+      document.getElementById('timer-container').appendChild(card);
+
+      const rect = handle.getBoundingClientRect();
+      const styles = window.getComputedStyle(handle);
+
+      expect(rect.height).to.be.at.least(36, 'Handle should be a comfortable touch target');
+      expect(rect.width).to.be.at.least(24, 'Handle should be wide enough to grab');
+      expect(styles.cursor).to.equal('grab');
+      expect(styles.flexShrink).to.equal('0');
+      expect(styles.userSelect).to.equal('none');
+    });
+
+    it('should show a grabbing cursor while the card is being dragged', () => {
+      const card = createTestTimerCard();
+      const handle = addHandle(card);
+      card.classList.add('dragging');
+      document.getElementById('timer-container').appendChild(card);
+
+      expect(window.getComputedStyle(handle).cursor).to.equal('grabbing');
+      expect(parseFloat(window.getComputedStyle(card).opacity)).to.be.below(1);
+    });
+
+    it('should keep the remove button square and the title inside a narrow card', () => {
+      const card = createTestTimerCard('Very Long Timer Title That Might Overflow');
+      addHandle(card);
+      card.style.width = '200px';
+      document.getElementById('timer-container').appendChild(card);
+
+      const cardRect = card.getBoundingClientRect();
+      const removeRect = card.querySelector('.timer-remove').getBoundingClientRect();
+      const titleRect = card.querySelector('.timer-title').getBoundingClientRect();
+      const handleRect = card.querySelector('.timer-drag-handle').getBoundingClientRect();
+
+      expect(removeRect.width).to.be.closeTo(36, 1);
+      expect(removeRect.height).to.be.closeTo(36, 1);
+      expect(removeRect.right).to.be.at.most(cardRect.right + 1);
+      expect(titleRect.right).to.be.at.most(removeRect.left);
+      expect(titleRect.left).to.be.at.least(handleRect.right - 8);
+      expect(handleRect.left).to.be.at.least(cardRect.left);
+    });
+  });
+
   describe('Top bar', () => {
     function createTopBar() {
       const header = document.createElement('header');

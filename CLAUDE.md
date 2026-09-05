@@ -14,6 +14,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - Multiple concurrent timers (1-20) with independent time tracking
 - Chess-clock mutual exclusivity: only one timer runs at a time
 - Editable timer titles
+- Drag a card's grip handle to reorder timers (arrow keys on the handle as the keyboard/touch fallback); the order is persisted
 - Page visibility handling: pauses running timers when tab becomes hidden
 - localStorage persistence: timer state persists across page reloads
 - Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
@@ -71,6 +72,7 @@ timers/
 - When `startTimer(id)` is called, pauses any currently running timer automatically
 - Delegates to StorageService for persistence
 - Limits total timers to 1-20
+- `moveTimer(id, toIndex)` / `reorderTimers(orderedIds)` change the array order (which is the saved order) without touching the running timer; bad input is rejected like elsewhere (unknown id → `false`, bad index or non-permutation → throws) and an unchanged order does not persist
 
 **StorageService (storageService.js)**
 - localStorage wrapper with schema validation
@@ -85,6 +87,7 @@ timers/
 - Tracks running timers that should resume when page visibility changes
 - The RAF loop only touches the DOM when a timer's formatted time or state changes (`lastDisplayedValues` / `lastDisplayedStates`); `applyTimerState()` is the single place that syncs button, `.active` class and status label
 - Persists a running timer's elapsed time once per second (on display tick) so a crash loses at most a second
+- Reordering uses native HTML5 drag and drop: only the `.timer-drag-handle` makes a card `draggable`, `dragover` on the container moves the dragged card before/after the card under the pointer, and `drop`/`dragend` commit the container's child order via `reorderTimers()`; cards are moved, never rebuilt, so `timerElements` stays valid. Arrow keys on the handle call `moveTimer()` one step at a time
 - `destroy()` tears down the RAF loop and the IdleDetector (used by tests)
 
 **IdleDetector (idleDetector.js)**
