@@ -16,7 +16,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - Editable timer titles
 - Drag a card's grip handle to reorder timers (arrow keys on the handle as the keyboard/touch fallback); the order is persisted
 - Optional per-timer goal (e.g. `25m`, `1h30m`, `1:30`): progress bar on the card, `over-target` state and one browser notification when reached
-- Page visibility handling: pauses running timers when tab becomes hidden
+- Page visibility / window focus handling: pauses running timers when the tab becomes hidden or the window loses focus
 - localStorage persistence: timer state persists across page reloads
 - Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
 - Header shows the running total across all timers
@@ -99,9 +99,11 @@ timers/
 - `destroy()` tears down the RAF loop and the IdleDetector (used by tests)
 
 **IdleDetector (idleDetector.js)**
-- Stamps `last_heartbeat` in localStorage every second while the tab is visible
-- On hide: stamps once, stops the heartbeat (so the next check measures the whole hidden period), and calls `onHidden`
-- On show/load: folds the gap since the last stamp into `accumulated_idle_ms`; on show calls `onVisible(total)`; invokes `callback(total)` when the total exceeds the threshold (`DEFAULT_IDLE_THRESHOLD_MS`, 10 s)
+- The page is "active" while it is visible AND its window has focus (`isActive()` = `!document.hidden && document.hasFocus()`); switching to another app or clicking into browser UI counts as inactive even though the tab stays visible
+- Listens to `visibilitychange` plus window `blur`/`focus`, all through one handler that recomputes `isActive()` and only acts when it changes, so a tab switch (which fires both blur and hidden) transitions once
+- Stamps `last_heartbeat` in localStorage every second while active
+- On going inactive: stamps once, stops the heartbeat (so the next check measures the whole inactive period), and calls `onInactive`
+- On becoming active/on load: folds the gap since the last stamp into `accumulated_idle_ms`; on return calls `onActive(total)`; invokes `callback(total)` when the total exceeds the threshold (`DEFAULT_IDLE_THRESHOLD_MS`, 10 s)
 - `checkIdle()` returns the accumulated total and is safe to call repeatedly
 
 **AllocationModal (allocationModal.js)** / **TimeDistributor (timeDistributor.js)**
@@ -118,11 +120,11 @@ When a user starts timer B while timer A is running:
 3. Timer B begins running
 4. Only one timer's time advances at a time
 
-**Page Visibility Handling:**
-- IdleDetector owns the `visibilitychange` listener and calls App's `onHidden` / `onVisible(total)` hooks; App registers no listener of its own
-- On hidden (`App.handleHidden()`): running timers are paused and their IDs stored in `hiddenRunningTimers`, mirrored to localStorage because browsers fire `visibilitychange` → hidden on unload. While a modal is open the set is only replaced if something was actually running, so it keeps naming the timer to resume
-- On visible and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes. Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
-- If the app loads in a hidden tab, `init()` calls `handleHidden()` instead
+**Page Visibility / Window Focus Handling:**
+- IdleDetector owns the `visibilitychange` and window `blur`/`focus` listeners and calls App's `onInactive` / `onActive(total)` hooks; App registers no listener of its own. Hidden tab and unfocused window are the same idle flow with the same 10 s threshold
+- On inactive (`App.handleInactive()`): running timers are paused and their IDs stored in `hiddenRunningTimers`, mirrored to localStorage because browsers fire `visibilitychange` → hidden on unload. While a modal is open the set is only replaced if something was actually running, so it keeps naming the timer to resume
+- On active and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes. Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
+- If the app loads in a hidden tab or an unfocused window (`idleDetector.isActive()` false), `init()` calls `handleInactive()` instead
 
 **Goals:**
 - `Timer.targetMs` (`null` = none) is set through `TimerManager.setTimerTarget(id, ms)`, persisted with the timer (absent in old saves loads as `null`) and survives `reset()`

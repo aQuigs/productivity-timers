@@ -57,8 +57,8 @@ export class App {
 
     this.idleDetector = new IdleDetector({
       idleThreshold: this.idleThreshold,
-      onHidden: () => this.handleHidden(),
-      onVisible: (idleMs) => this.handleIdleReturn(idleMs)
+      onInactive: () => this.handleInactive(),
+      onActive: (idleMs) => this.handleIdleReturn(idleMs)
     });
   }
 
@@ -70,13 +70,13 @@ export class App {
     this.bindGlobalEvents();
     this.startUpdateLoop();
 
-    if (document.hidden) {
-      // Loaded in a background tab: no visibilitychange fires for the initial state
-      this.handleHidden();
-    } else {
+    if (this.idleDetector.isActive()) {
       // Unloading fires visibilitychange -> hidden, so after a refresh the running timer
       // is paused and waiting here, possibly together with idle time to allocate
       this.handleIdleReturn(this.idleDetector.checkIdle());
+    } else {
+      // Loaded in a background tab or unfocused window: no event fires for the initial state
+      this.handleInactive();
     }
   }
 
@@ -765,9 +765,10 @@ export class App {
   }
 
   /**
-   * Pause running timers while the page is hidden and remember which to resume
+   * Pause running timers while the page is hidden or its window unfocused, and
+   * remember which to resume
    */
-  handleHidden() {
+  handleInactive() {
     const running = this.timerManager.getAllTimers().filter(timer => timer.isRunning());
     running.forEach(timer => this.timerManager.pauseTimer(timer.id));
 
@@ -780,7 +781,7 @@ export class App {
   }
 
   /**
-   * Resume the timers paused on hide and discard any pending idle time
+   * Resume the timers paused on going inactive and discard any pending idle time
    */
   handleResume() {
     this.hiddenRunningTimers.forEach(timerId => {
