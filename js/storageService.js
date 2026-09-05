@@ -205,6 +205,13 @@ export class StorageService {
       return false;
     }
 
+    // Validate targetMs (must be absent, null, or a positive finite number)
+    if (timer.targetMs !== undefined &&
+        timer.targetMs !== null &&
+        (typeof timer.targetMs !== 'number' || !Number.isFinite(timer.targetMs) || timer.targetMs <= 0)) {
+      return false;
+    }
+
     return true;
   }
 }

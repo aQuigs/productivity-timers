@@ -14,6 +14,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - Multiple concurrent timers (1-20) with independent time tracking
 - Chess-clock mutual exclusivity: only one timer runs at a time
 - Editable timer titles
+- Optional per-timer goal (e.g. `25m`, `1h30m`, `1:30`): progress bar on the card, `over-target` state and one browser notification when reached
 - Page visibility handling: pauses running timers when tab becomes hidden
 - localStorage persistence: timer state persists across page reloads
 - Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
@@ -34,6 +35,8 @@ timers/
 │   ├── idleDetector.js      # IdleDetector: heartbeat-based away-time tracking
 │   ├── allocationModal.js   # AllocationModal: "where should idle time go" dialog
 │   ├── timeDistributor.js   # Pure allocation strategies (single/fixed/percentage)
+│   ├── parseDuration.js     # Pure goal-input parser: "25m", "1h 30m", "1:30", bare minutes -> ms or null
+│   ├── notifier.js          # createNotifier(): Notification API wrapper App takes as an injectable
 │   └── formatDuration.js    # Shared HH:MM:SS formatter used by Timer, modal, header
 ├── tests/                    # Web Test Runner test suite (Mocha/Chai)
 │   ├── helpers.js            # Shared test helpers (visibility simulation)
@@ -44,6 +47,8 @@ timers/
 │   ├── idleDetector.test.js
 │   ├── allocationModal.test.js
 │   ├── timeDistributor.test.js
+│   ├── parseDuration.test.js
+│   ├── notifier.test.js
 │   ├── formatDuration.test.js
 │   ├── integration.test.js
 │   ├── layout.test.js        # CSS contracts: grid widths, tabular digits, top bar overflow
@@ -112,8 +117,13 @@ When a user starts timer B while timer A is running:
 - On visible and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes. Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
 - If the app loads in a hidden tab, `init()` calls `handleHidden()` instead
 
+**Goals:**
+- `Timer.targetMs` (`null` = none) is set through `TimerManager.setTimerTarget(id, ms)`, persisted with the timer (absent in old saves loads as `null`) and survives `reset()`
+- The card's `.timer-goal-btn` ("Set goal" or the `Goal HH:MM:SS` chip) swaps for `.timer-goal-input`; Enter/blur apply via `parseDuration`, Escape cancels, empty clears, unparseable text keeps the old goal. `applyGoalState()` alone syncs chip, `.timer-progress-bar` width and the card's `over-target` class, and the RAF loop calls it only when the whole-number percentage or reached flag changes
+- `goalReachedTimers` mirrors "currently at/over goal": a crossing seen on the display tick calls `notifier.notify()` once, and dropping below (reset, raised goal) re-arms it; cards rendered already over goal and goals set below the elapsed time are adopted silently. `notifier.requestPermission()` runs only when the user sets a goal
+
 **Persistence:**
-- Every state change (start, pause, add, remove, title update, reset) triggers `TimerManager.persist()`
+- Every state change (start, pause, add, remove, title update, goal update, reset) triggers `TimerManager.persist()`
 - Individual timer operations: `resetTimer(id)`, `updateTimerTitle(id, newTitle)` - all trigger persistence
 - On page load, TimerManager attempts to restore timers from localStorage
 - The previously running timer is auto-started on restore (from its saved elapsed time); the gap since the last save is handled by the IdleDetector

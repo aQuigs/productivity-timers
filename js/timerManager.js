@@ -231,6 +231,24 @@ export class TimerManager {
   }
 
   /**
+   * Sets or clears a timer's goal and persists the change
+   * @param {string} id - ID of timer to update
+   * @param {number|null} targetMs - Goal in milliseconds, or null for no goal
+   * @returns {boolean} true if updated, false if timer not found
+   * @throws {Error} If the target is invalid
+   */
+  setTimerTarget(id, targetMs) {
+    const timer = this.getTimer(id);
+    if (!timer) {
+      return false;
+    }
+
+    timer.setTarget(targetMs);
+    this.persist();
+    return true;
+  }
+
+  /**
    * Resets an individual timer and persists the change
    * @param {string} id - ID of timer to reset
    * @returns {boolean} true if reset, false if timer not found
