@@ -33,6 +33,7 @@ timers/
 │   ├── timer.js             # Timer: individual timer state (private fields)
 │   ├── timerManager.js      # TimerManager: orchestrates timers, enforces chess-clock
 │   ├── storageService.js    # StorageService: localStorage persistence + validation
+│   ├── storageNamespace.js  # namespacedKey(): per-PR localStorage key prefix so previews never share production state
 │   ├── idleDetector.js      # IdleDetector: heartbeat-based away-time tracking
 │   ├── allocationModal.js   # AllocationModal: "where should idle time go" dialog
 │   ├── timeDistributor.js   # Pure allocation strategies (single/fixed/percentage)
@@ -45,6 +46,7 @@ timers/
 │   ├── timer.test.js
 │   ├── timerManager.test.js
 │   ├── storageService.test.js
+│   ├── storageNamespace.test.js
 │   ├── idleDetector.test.js
 │   ├── allocationModal.test.js
 │   ├── timeDistributor.test.js
@@ -84,6 +86,7 @@ timers/
 - Validates state structure and timer constraints before load/save
 - Handles version checking and corrupted data cleanup
 - Gracefully handles localStorage unavailability
+- Default key is `namespacedKey('productivity-timers-v1')`: unchanged on production and local dev, prefixed with `pr-<n>:` on a PR preview
 
 **App (app.js)**
 - DOM initialization and event binding; exported as a class, bootstrapped by `main.js`
@@ -132,6 +135,7 @@ When a user starts timer B while timer A is running:
 - On page load, TimerManager attempts to restore timers from localStorage
 - The previously running timer is auto-started on restore (from its saved elapsed time); the gap since the last save is handled by the IdleDetector
 - `App.handleResetAll()` delegates to `TimerManager.resetAll()` so the reset is persisted like every other state change
+- **PR preview isolation**: previews deploy to `/pr-previews/pr-<n>/` on the same origin as production, so every localStorage key (timer state, `last_heartbeat`, `accumulated_idle_ms`, `app_hidden_running_timers`) goes through `storageNamespace.js`, which prefixes it with `pr-<n>:` there and leaves it untouched elsewhere. Each preview gets its own bucket and production keeps its historical keys. IdleDetector and App resolve their keys once at construction; tests simulate a preview with `atPreviewPath()` from `tests/helpers.js`
 
 ## Commands
 
