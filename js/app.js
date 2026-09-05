@@ -5,6 +5,7 @@ import { allocateToSingle, allocateDiscard, allocateFixed, allocatePercentage } 
 import { formatDuration } from './formatDuration.js';
 import { parseDuration } from './parseDuration.js';
 import { createNotifier } from './notifier.js';
+import { namespacedKey } from './storageNamespace.js';
 
 const HIDDEN_RUNNING_TIMERS_KEY = 'app_hidden_running_timers';
 const GOAL_PLACEHOLDER = '25m, 2h, 1:30';
@@ -51,6 +52,7 @@ export class App {
     this.draggingCard = null;
     this.allocationInProgress = false;
     this.idleThreshold = DEFAULT_IDLE_THRESHOLD_MS;
+    this.hiddenRunningTimersKey = namespacedKey(HIDDEN_RUNNING_TIMERS_KEY);
     this.hiddenRunningTimers = this.#loadHiddenRunningTimers();
 
     this.idleDetector = new IdleDetector({
@@ -91,7 +93,7 @@ export class App {
 
   #loadHiddenRunningTimers() {
     try {
-      const saved = localStorage.getItem(HIDDEN_RUNNING_TIMERS_KEY);
+      const saved = localStorage.getItem(this.hiddenRunningTimersKey);
       const ids = saved ? JSON.parse(saved) : [];
       return new Set(Array.isArray(ids) ? ids : []);
     } catch (error) {
@@ -101,7 +103,7 @@ export class App {
   }
 
   #saveHiddenRunningTimers() {
-    localStorage.setItem(HIDDEN_RUNNING_TIMERS_KEY, JSON.stringify(Array.from(this.hiddenRunningTimers)));
+    localStorage.setItem(this.hiddenRunningTimersKey, JSON.stringify(Array.from(this.hiddenRunningTimers)));
   }
 
   /**
@@ -785,7 +787,7 @@ export class App {
       this.timerManager.startTimer(timerId);
     });
     this.hiddenRunningTimers.clear();
-    localStorage.removeItem(HIDDEN_RUNNING_TIMERS_KEY);
+    localStorage.removeItem(this.hiddenRunningTimersKey);
     this.idleDetector.clearAccumulatedIdle();
     this.updateAllTimerDisplays();
   }

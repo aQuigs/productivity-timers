@@ -1,7 +1,7 @@
 import { expect } from '@esm-bundle/chai';
 import { App } from '../js/app.js';
 import { TimerManager } from '../js/timerManager.js';
-import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo } from './helpers.js';
+import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo, atPreviewPath } from './helpers.js';
 
 describe('App', () => {
   let container;
@@ -1170,6 +1170,51 @@ describe('App', () => {
 
         expect(app.goalReachedTimers.has(timer.id)).to.be.false;
         expect(app.lastDisplayedGoals.has(timer.id)).to.be.false;
+      });
+    });
+  });
+
+  describe('PR Preview Isolation', () => {
+    it('should keep a preview\'s timers apart from production\'s', async () => {
+      const prodId = seedRunningTimer();
+      const prodState = localStorage.getItem('productivity-timers-v1');
+
+      await atPreviewPath('pr-12', async () => {
+        createApp();
+        await tick();
+        app.timerManager.startTimer(app.timerManager.getAllTimers()[0].id);
+      });
+
+      expect(app.timerManager.getAllTimers().map(t => t.id)).to.not.include(prodId);
+      expect(localStorage.getItem('pr-12:productivity-timers-v1')).to.not.be.null;
+      expect(localStorage.getItem('productivity-timers-v1')).to.equal(prodState);
+    });
+
+    it('should not open the allocation modal for idle time that belongs to production', async () => {
+      heartbeatAgo(15000);
+
+      await atPreviewPath('pr-12', async () => {
+        createApp();
+        await tick();
+      });
+
+      expect(modals().length).to.equal(0);
+      expect(localStorage.getItem('accumulated_idle_ms')).to.be.null;
+    });
+
+    it('should remember hidden running timers and the heartbeat per preview', async () => {
+      await atPreviewPath('pr-12', async () => {
+        createApp();
+        await tick();
+        const id = app.timerManager.getAllTimers()[0].id;
+        app.timerManager.startTimer(id);
+
+        hide();
+
+        expect(JSON.parse(localStorage.getItem('pr-12:app_hidden_running_timers'))).to.deep.equal([id]);
+        expect(localStorage.getItem('app_hidden_running_timers')).to.be.null;
+        expect(localStorage.getItem('pr-12:last_heartbeat')).to.not.be.null;
+        expect(localStorage.getItem('last_heartbeat')).to.be.null;
       });
     });
   });

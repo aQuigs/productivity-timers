@@ -1,6 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import IdleDetector from '../js/idleDetector.js';
-import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo } from './helpers.js';
+import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo, atPreviewPath } from './helpers.js';
 
 describe('IdleDetector', () => {
   let detector;
@@ -360,6 +360,58 @@ describe('IdleDetector', () => {
       } finally {
         Date.now = originalDateNow;
       }
+    });
+  });
+
+  describe('PR Preview Isolation', () => {
+    it('should stamp the heartbeat under a per-PR key inside a preview', async () => {
+      await atPreviewPath('pr-12', () => {
+        detector = new IdleDetector();
+      });
+
+      expect(localStorage.getItem('pr-12:last_heartbeat')).to.not.be.null;
+      expect(localStorage.getItem('last_heartbeat')).to.be.null;
+    });
+
+    it('should ignore the production heartbeat and idle total inside a preview', async () => {
+      localStorage.setItem('last_heartbeat', String(Date.now() - 60000));
+      localStorage.setItem('accumulated_idle_ms', '60000');
+      let received = null;
+
+      await atPreviewPath('pr-12', () => {
+        detector = new IdleDetector({ callback: (ms) => { received = ms; } });
+        expect(IdleDetector.readAccumulatedIdleMs()).to.equal(0);
+      });
+
+      expect(received).to.be.null;
+      expect(localStorage.getItem('accumulated_idle_ms')).to.equal('60000');
+    });
+
+    it('should accumulate idle time under the per-PR key', async () => {
+      localStorage.setItem('pr-12:last_heartbeat', String(Date.now() - 60000));
+      let received = null;
+
+      await atPreviewPath('pr-12', () => {
+        detector = new IdleDetector({ callback: (ms) => { received = ms; } });
+        expect(IdleDetector.readAccumulatedIdleMs()).to.be.at.least(60000);
+      });
+
+      expect(received).to.be.at.least(60000);
+      expect(parseInt(localStorage.getItem('pr-12:accumulated_idle_ms'), 10)).to.be.at.least(60000);
+      expect(localStorage.getItem('accumulated_idle_ms')).to.be.null;
+    });
+
+    it('should keep the keys it was created with for its whole lifetime', async () => {
+      await atPreviewPath('pr-12', () => {
+        detector = new IdleDetector();
+      });
+      localStorage.clear();
+
+      detector.updateHeartbeat();
+      detector.clearAccumulatedIdle();
+
+      expect(localStorage.getItem('pr-12:last_heartbeat')).to.not.be.null;
+      expect(localStorage.getItem('last_heartbeat')).to.be.null;
     });
   });
 });
