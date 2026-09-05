@@ -231,19 +231,20 @@ export class TimerManager {
   }
 
   /**
-   * Sets or clears a timer's goal and persists the change
+   * Sets or clears a timer's goal or budget and persists the change
    * @param {string} id - ID of timer to update
-   * @param {number|null} targetMs - Goal in milliseconds, or null for no goal
+   * @param {number|null} targetMs - Target in milliseconds, or null to clear
+   * @param {'goal'|'budget'} [kind='goal'] - Minimum to reach or maximum not to exceed
    * @returns {boolean} true if updated, false if timer not found
-   * @throws {Error} If the target is invalid
+   * @throws {Error} If the target or kind is invalid
    */
-  setTimerTarget(id, targetMs) {
+  setTimerTarget(id, targetMs, kind = 'goal') {
     const timer = this.getTimer(id);
     if (!timer) {
       return false;
     }
 
-    timer.setTarget(targetMs);
+    timer.setTarget(targetMs, kind);
     this.persist();
     return true;
   }

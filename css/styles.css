@@ -23,6 +23,7 @@
 
     --danger: #ef4444;
     --danger-soft: rgba(239, 68, 68, 0.1);
+    --danger-line: rgba(239, 68, 68, 0.45);
     --ok: #4ade80;
 
     --goal: #fbbf24;
@@ -73,6 +74,7 @@
         --accent-line: rgba(120, 170, 20, 0.55);
 
         --danger-soft: rgba(239, 68, 68, 0.08);
+        --danger-line: rgba(220, 38, 38, 0.5);
         --ok: #16a34a;
 
         --goal: #d97706;
@@ -563,8 +565,70 @@ button {
     border-color: var(--goal-line);
 }
 
-.timer-goal-input {
+.timer-card.over-budget .timer-goal-btn.is-set {
+    color: var(--danger);
+    background: var(--danger-soft);
+    border-color: var(--danger-line);
+}
+
+.timer-goal-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.timer-goal-kind {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding: 2px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+}
+
+.timer-goal-kind-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-2);
+    border-radius: 999px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s var(--ease), background-color 0.15s var(--ease);
+}
+
+.timer-goal-kind-option:hover {
+    color: var(--text);
+}
+
+.timer-goal-kind-option:has(input:checked) {
+    color: var(--accent-text);
+    background: var(--accent-soft);
+}
+
+.timer-goal-kind-option:has(input:focus-visible) {
+    box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+/* The label is the visible control; the radio stays in the tree for the keyboard and assistive tech */
+.timer-goal-kind-option input {
+    position: absolute;
+    inset: 0;
     width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.timer-goal-input {
+    flex: 1 1 120px;
+    min-width: 0;
     max-width: 200px;
     height: 30px;
     padding: 0 10px;
@@ -614,6 +678,10 @@ button {
 
 .timer-card.over-target .timer-progress-bar {
     background: var(--goal);
+}
+
+.timer-card.over-budget .timer-progress-bar {
+    background: var(--danger);
 }
 
 .timer-controls {

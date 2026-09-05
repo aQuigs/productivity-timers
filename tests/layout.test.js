@@ -58,12 +58,36 @@ describe('Layout and Overflow Tests', () => {
 
     const goalBtn = document.createElement('button');
     goalBtn.className = 'timer-goal-btn';
-    goalBtn.textContent = 'Set goal';
+    goalBtn.textContent = 'Set goal or budget';
+
+    const goalEditor = document.createElement('div');
+    goalEditor.className = 'timer-goal-editor';
+    goalEditor.hidden = true;
+
+    const goalKind = document.createElement('div');
+    goalKind.className = 'timer-goal-kind';
+    goalKind.setAttribute('role', 'radiogroup');
+    ['goal', 'budget'].forEach(kind => {
+      const label = document.createElement('label');
+      label.className = 'timer-goal-kind-option';
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'goal-kind-layout';
+      radio.value = kind;
+      radio.checked = kind === 'goal';
+      const text = document.createElement('span');
+      text.textContent = kind === 'goal' ? 'Goal' : 'Budget';
+      label.appendChild(radio);
+      label.appendChild(text);
+      goalKind.appendChild(label);
+    });
 
     const goalInput = document.createElement('input');
     goalInput.type = 'text';
     goalInput.className = 'timer-goal-input';
-    goalInput.hidden = true;
+
+    goalEditor.appendChild(goalKind);
+    goalEditor.appendChild(goalInput);
 
     const progress = document.createElement('div');
     progress.className = 'timer-progress';
@@ -78,7 +102,7 @@ describe('Layout and Overflow Tests', () => {
     goalError.hidden = true;
 
     goal.appendChild(goalBtn);
-    goal.appendChild(goalInput);
+    goal.appendChild(goalEditor);
     goal.appendChild(goalError);
     goal.appendChild(progress);
 
@@ -111,14 +135,18 @@ describe('Layout and Overflow Tests', () => {
   function createInvalidGoalCard() {
     const card = createTestTimerCard();
     card.querySelector('.timer-goal-btn').hidden = true;
+    card.querySelector('.timer-goal-editor').hidden = false;
     const input = card.querySelector('.timer-goal-input');
-    input.hidden = false;
     input.value = 'soon';
     input.classList.add('is-invalid');
     const error = card.querySelector('.timer-goal-error');
     error.hidden = false;
-    error.textContent = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+    error.textContent = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
     return card;
+  }
+
+  function createBudgetCard(chipText = 'Budget 02:00:00') {
+    return createGoalCard(chipText);
   }
 
   // Resolves a token like --danger to the rgb() string computed styles report
@@ -382,7 +410,7 @@ describe('Layout and Overflow Tests', () => {
       goalBtn.hidden = true;
 
       expect(window.getComputedStyle(goalBtn).display).to.equal('none');
-      expect(window.getComputedStyle(card.querySelector('.timer-goal-input')).display).to.equal('none');
+      expect(window.getComputedStyle(card.querySelector('.timer-goal-editor')).display).to.equal('none');
       expect(window.getComputedStyle(card.querySelector('.timer-progress')).display).to.equal('none');
     });
 
@@ -476,19 +504,60 @@ describe('Layout and Overflow Tests', () => {
       expect(errorRect.height).to.be.greaterThan(errorRect.width / 8, 'message should wrap onto more than one line');
     });
 
-    it('should keep the chip and input inside the card on a narrow layout', () => {
-      const card = createGoalCard('Goal 125:00:00 · reached');
-      card.querySelector('.timer-goal-input').hidden = false;
+    it('should keep the chip and editor inside the card on a narrow layout', () => {
+      const card = createGoalCard('Budget 125:00:00 · exceeded');
+      card.querySelector('.timer-goal-editor').hidden = false;
       const timerContainer = document.getElementById('timer-container');
       timerContainer.style.width = '250px';
       timerContainer.appendChild(card);
 
       const cardRect = card.getBoundingClientRect();
-      ['.timer-goal-btn', '.timer-goal-input', '.timer-progress'].forEach(selector => {
+      ['.timer-goal-btn', '.timer-goal-kind', '.timer-goal-input', '.timer-progress'].forEach(selector => {
         const rect = card.querySelector(selector).getBoundingClientRect();
         expect(rect.right).to.be.at.most(cardRect.right + 1, `${selector} should stay inside the card`);
         expect(rect.left).to.be.at.least(cardRect.left - 1, `${selector} should stay inside the card`);
       });
+    });
+
+    it('should lay the kind toggle out as two visible, clickable options', () => {
+      const card = createGoalCard();
+      card.querySelector('.timer-goal-editor').hidden = false;
+      document.getElementById('timer-container').appendChild(card);
+
+      const options = card.querySelectorAll('.timer-goal-kind-option');
+      expect(options).to.have.lengthOf(2);
+      options.forEach(option => {
+        const rect = option.getBoundingClientRect();
+        expect(rect.width).to.be.greaterThan(30);
+        expect(rect.height).to.be.at.least(24);
+      });
+
+      const checked = window.getComputedStyle(options[0]);
+      const unchecked = window.getComputedStyle(options[1]);
+      expect(checked.backgroundColor).to.not.equal(unchecked.backgroundColor);
+    });
+
+    it('should colour an exceeded budget differently from a reached goal and from pending', () => {
+      const timerContainer = document.getElementById('timer-container');
+      const pending = createBudgetCard();
+      const overBudget = createBudgetCard('Budget 02:00:00 · exceeded');
+      overBudget.classList.add('over-budget');
+      const overTarget = createGoalCard('Goal 02:00:00 · reached');
+      overTarget.classList.add('over-target');
+      timerContainer.appendChild(pending);
+      timerContainer.appendChild(overBudget);
+      timerContainer.appendChild(overTarget);
+      const danger = computedToken('--danger');
+
+      const barColor = card => window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor;
+      const chipColor = card => window.getComputedStyle(card.querySelector('.timer-goal-btn')).color;
+
+      expect(barColor(overBudget)).to.equal(danger);
+      expect(barColor(overBudget)).to.not.equal(barColor(pending));
+      expect(barColor(overBudget)).to.not.equal(barColor(overTarget));
+      expect(chipColor(overBudget)).to.equal(danger);
+      expect(chipColor(overBudget)).to.not.equal(chipColor(pending));
+      expect(chipColor(overBudget)).to.not.equal(chipColor(overTarget));
     });
   });
 

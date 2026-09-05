@@ -15,8 +15,8 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - Chess-clock mutual exclusivity: only one timer runs at a time
 - Editable timer titles
 - Drag a card's grip handle to reorder timers (arrow keys on the handle as the keyboard/touch fallback); the order is persisted
-- Optional per-timer goal (e.g. `25m`, `1h30m`, `1:30`): progress bar on the card, `over-target` state and one browser notification when reached
 - Page visibility / window focus handling: pauses running timers when the tab becomes hidden or the window loses focus
+- Optional per-timer goal or budget (e.g. `25m`, `1h30m`, `1:30`): a goal is a minimum to reach (`over-target`, amber, "Goal reached" notification), a budget a maximum not to exceed (`over-budget`, red, "Budget exceeded" notification); both show a progress bar on the card
 - localStorage persistence: timer state persists across page reloads
 - Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
 - Header shows the running total across all timers
@@ -127,13 +127,15 @@ When a user starts timer B while timer A is running:
 - On active and on load (`App.handleIdleReturn(total)`): within the threshold, `hiddenRunningTimers` are resumed; otherwise the allocation modal opens and the previous timer resumes after it closes (or the chosen timer, when the user ticked "Make this the running timer"). Guarded by `allocationInProgress` so there is one modal at a time (the open modal picks up further idle time itself)
 - If the app loads in a hidden tab or an unfocused window (`idleDetector.isActive()` false), `init()` calls `handleInactive()` instead
 
-**Goals:**
-- `Timer.targetMs` (`null` = none) is set through `TimerManager.setTimerTarget(id, ms)`, persisted with the timer (absent in old saves loads as `null`) and survives `reset()`
-- The card's `.timer-goal-btn` ("Set goal" or the `Goal HH:MM:SS` chip) swaps for `.timer-goal-input`; Enter/blur apply via `parseDuration`, Escape cancels, empty clears, unparseable text keeps the editor open with the input flagged `is-invalid`/`aria-invalid` and a `.timer-goal-error` alert (cleared on input, Escape or a valid commit). `applyGoalState()` alone syncs chip, `.timer-progress-bar` width and the card's `over-target` class, and the RAF loop calls it only when the whole-number percentage or reached flag changes
-- `goalReachedTimers` mirrors "currently at/over goal": a crossing seen on the display tick calls `notifier.notify()` once, and dropping below (reset, raised goal) re-arms it; cards rendered already over goal and goals set below the elapsed time are adopted silently. `notifier.requestPermission()` runs only when the user sets a goal
+**Goals and budgets:**
+- A timer has at most one target: `Timer.targetMs` (`null` = none) plus `Timer.targetKind`, `'goal'` (a minimum to reach) or `'budget'` (a maximum not to exceed), `null` without a target. `Timer.TARGET_KINDS` lists the two. Set through `TimerManager.setTimerTarget(id, ms, kind = 'goal')`, persisted with the timer (a target saved before kinds existed loads as a goal; absent target loads as `null`) and survives `reset()`
+- The card's `.timer-goal-btn` ("Set goal or budget", or the `Goal HH:MM:SS` / `Budget HH:MM:SS` chip) swaps for `.timer-goal-editor`: a `.timer-goal-kind` radiogroup (Goal / Budget, one radio `name` per card, preselecting the current kind) beside `.timer-goal-input`. Enter applies, Escape cancels, empty clears, unparseable text keeps the editor open with the input flagged `is-invalid`/`aria-invalid` and a `.timer-goal-error` alert (cleared on input, Escape or a valid commit)
+- Leaving the editor applies too, via `focusout` on the wrapper: focus moving between its own controls (`relatedTarget` inside) is ignored; a bare blur is treated as leaving unless the pointer last went down inside the editor (`App.pointerDownEditor`, tracked by a document-level `pointerdown` listener), which is what a tap on the kind toggle looks like on touch screens. Mouse clicks on the toggle `preventDefault` on `mousedown` so focus never leaves the input, and any `click` on the toggle refocuses the input (a tap still moves focus on touch screens); arrow-key changes fire no click, so keyboard users stay on the radio
+- `applyGoalState()` alone syncs the chip words (`· reached` / `· exceeded`, "Edit goal" / "Edit budget" titles, progressbar `aria-label`), `.timer-progress-bar` width and the card's `over-target` (goal) or `over-budget` (budget) class, and the RAF loop calls it only when the kind, whole-number percentage or reached flag changes. The words per kind live in the `TARGET_KINDS` table at the top of `app.js`
+- `goalReachedTimers` mirrors "currently at/over target" for both kinds: a crossing seen on the display tick calls `notifier.notify()` once ("Goal reached" / "Budget exceeded"), and dropping below (reset, raised target) re-arms it; cards rendered already over target and targets set below the elapsed time are adopted silently. `notifier.requestPermission()` runs only when the user sets a target
 
 **Persistence:**
-- Every state change (start, pause, add, remove, title update, goal update, reset) triggers `TimerManager.persist()`
+- Every state change (start, pause, add, remove, title update, goal/budget update, reset) triggers `TimerManager.persist()`
 - Individual timer operations: `resetTimer(id)`, `updateTimerTitle(id, newTitle)` - all trigger persistence
 - On page load, TimerManager attempts to restore timers from localStorage
 - The previously running timer is auto-started on restore (from its saved elapsed time); the gap since the last save is handled by the IdleDetector
