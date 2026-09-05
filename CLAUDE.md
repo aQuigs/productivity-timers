@@ -95,6 +95,7 @@ timers/
 
 **AllocationModal (allocationModal.js)** / **TimeDistributor (timeDistributor.js)**
 - Modal resolves `{ strategy, config, idleMs }`; `idleMs` is the total it last displayed (it polls `accumulated_idle_ms` while open)
+- Default selection is `previous-timer` when a timer was running before the tab went idle, otherwise `discard` (the `previous-timer` option is disabled in that case)
 - Distributor functions add the remainder to a timer that already has a share; with no remainder timer, rounding dust goes to the largest share
 
 ### Key Behaviors

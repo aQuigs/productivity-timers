@@ -111,13 +111,34 @@ describe('AllocationModal', () => {
       expect(strategy4).to.exist;
     });
 
-    it('should have strategy 5: discard (default)', () => {
+    it('should have strategy 5: discard', () => {
       modal = new AllocationModal(60000, [], null);
       modal.show();
 
       const strategy5 = document.querySelector('.allocation-modal input[value="discard"]');
       expect(strategy5).to.exist;
-      expect(strategy5.checked).to.be.true;
+      expect(strategy5.type).to.equal('radio');
+      expect(strategy5.name).to.equal('strategy');
+    });
+
+    it('should default to the previous timer when one exists', () => {
+      modal = new AllocationModal(60000, [], 'timer-123');
+      modal.show();
+
+      const previous = document.querySelector('.allocation-modal input[value="previous-timer"]');
+      const discard = document.querySelector('.allocation-modal input[value="discard"]');
+      expect(previous.checked).to.be.true;
+      expect(discard.checked).to.be.false;
+    });
+
+    it('should default to discard when there is no previous timer', () => {
+      modal = new AllocationModal(60000, [], null);
+      modal.show();
+
+      const previous = document.querySelector('.allocation-modal input[value="previous-timer"]');
+      const discard = document.querySelector('.allocation-modal input[value="discard"]');
+      expect(discard.checked).to.be.true;
+      expect(previous.checked).to.be.false;
     });
 
     it('should show timer dropdown for strategy 2 (selected timer)', () => {
@@ -196,7 +217,7 @@ describe('AllocationModal', () => {
       expect(result).to.be.an.instanceof(Promise);
     });
 
-    it('should resolve with discard strategy when Apply clicked with default selection', (done) => {
+    it('should resolve with discard strategy when Apply clicked with default selection and no previous timer', (done) => {
       modal = new AllocationModal(60000, [], null);
       const promise = modal.show();
 
@@ -206,6 +227,19 @@ describe('AllocationModal', () => {
       promise.then(result => {
         expect(result.strategy).to.equal('discard');
         expect(result.config).to.be.an('object');
+        done();
+      }).catch(done);
+    });
+
+    it('should resolve with previous-timer strategy when Apply clicked with default selection and a previous timer', (done) => {
+      modal = new AllocationModal(60000, [], 'timer-123');
+      const promise = modal.show();
+
+      document.querySelector('.allocation-modal button.btn-apply').click();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('previous-timer');
+        expect(result.config.timerId).to.equal('timer-123');
         done();
       }).catch(done);
     });
