@@ -111,8 +111,6 @@ timers/
 - For `selected-timer`, `config.makeRunning` mirrors the "Make this the running timer" checkbox; App then resumes that timer instead of the previous one
 - Default selection is `previous-timer` when a timer was running before the tab went idle, otherwise `discard` (the `previous-timer` option is disabled in that case)
 - Distributor functions add the remainder to a timer that already has a share; with no remainder timer, rounding dust goes to the largest share
-- Either partial split can throw the leftover away, but never by accident — each needs an explicit act. The fixed form's "Remainder goes to" select ends with a "Discard the rest" option (the first timer stays the default). The percentage form accepts any total from just above 0 up to 100, and a short one raises a `.percentage-discard-label` checkbox ("Discard the remaining 20%") that gates Apply: unticked the total reads `Total: 80% · 20% unallocated` and is invalid, ticked it reads `· 20% discarded` and applies. The tick is cleared whenever the leftover disappears, so a later short split has to be confirmed again
-- Both pass `remainderTimerId: DISCARD_REMAINDER` (`timeDistributor.js`), which makes `assignRemainder()` drop the leftover instead of routing it to a timer; a percentage split that totals exactly 100 sends no remainder id, so rounding dust still lands on the largest share
 
 ### Key Behaviors
 

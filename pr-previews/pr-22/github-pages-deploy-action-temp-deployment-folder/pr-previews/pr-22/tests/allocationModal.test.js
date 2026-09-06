@@ -1238,13 +1238,6 @@ describe('AllocationModal', () => {
     const remainingText = () => document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time').textContent;
     const totalText = () => document.querySelector('.allocation-modal .percentage-distribution-form .percentage-total').textContent;
     const applyDisabled = () => document.querySelector('.allocation-modal button.btn-apply').disabled;
-    const discardConfirm = () => document.querySelector('.allocation-modal .percentage-distribution-form .percentage-discard-checkbox');
-    const discardConfirmLabel = () => discardConfirm().closest('label');
-    const isVisible = (el) => el.getClientRects().length > 0;
-    const confirmDiscard = (checked = true) => {
-      discardConfirm().checked = checked;
-      discardConfirm().dispatchEvent(new Event('change'));
-    };
 
     it('should offer discarding the rest after the timers in the remainder dropdown', () => {
       modal = new AllocationModal(600000, timers, null);
@@ -1292,15 +1285,13 @@ describe('AllocationModal', () => {
       expect(remainingText()).to.match(/discard/i);
     });
 
-    it('should let a percentage split under 100 apply once the discard is confirmed', (done) => {
+    it('should let a percentage split under 100 apply, discarding the rest', (done) => {
       modal = new AllocationModal(600000, timers, null);
       const promise = modal.show();
       choose('percentage-distribution');
 
       setPercentages([50, 30]);
-      expect(applyDisabled(), 'apply blocked until the leftover is confirmed').to.be.true;
-      confirmDiscard();
-      expect(applyDisabled(), 'apply allowed once confirmed').to.be.false;
+      expect(applyDisabled(), 'apply stays enabled under 100%').to.be.false;
       apply();
 
       promise.then(result => {
@@ -1312,89 +1303,18 @@ describe('AllocationModal', () => {
       }).catch(done);
     });
 
-    it('should ask before discarding, naming the share left over', () => {
-      modal = new AllocationModal(600000, timers, null);
-      modal.show();
-      choose('percentage-distribution');
-
-      expect(isVisible(discardConfirm()), 'hidden with nothing allocated').to.be.false;
-
-      setPercentages([50, 30]);
-      expect(isVisible(discardConfirm()), 'shown once part of the time is unallocated').to.be.true;
-      expect(discardConfirm().checked, 'unticked by default').to.be.false;
-      expect(discardConfirmLabel().textContent).to.include('20%');
-
-      setPercentages([50, 20]);
-      expect(discardConfirmLabel().textContent, 'follows the split').to.include('30%');
-
-      setPercentages([50, 50]);
-      expect(isVisible(discardConfirm()), 'hidden once the split totals 100').to.be.false;
-      expect(applyDisabled()).to.be.false;
-    });
-
-    it('should call the leftover unallocated until it is confirmed discarded', () => {
+    it('should report how much of the percentage split is discarded', () => {
       modal = new AllocationModal(600000, timers, null);
       modal.show();
       choose('percentage-distribution');
 
       setPercentages([50, 30]);
       expect(totalText()).to.include('80%');
-      expect(totalText()).to.include('20% unallocated');
-
-      confirmDiscard();
       expect(totalText()).to.include('20% discarded');
 
       setPercentages([50, 50]);
       expect(totalText()).to.include('100%');
-      expect(totalText()).to.not.match(/discard|unallocated/i);
-    });
-
-    it('should block Apply again when the discard is unconfirmed', () => {
-      modal = new AllocationModal(600000, timers, null);
-      modal.show();
-      choose('percentage-distribution');
-
-      setPercentages([50, 30]);
-      confirmDiscard();
-      expect(applyDisabled()).to.be.false;
-
-      confirmDiscard(false);
-      expect(applyDisabled()).to.be.true;
-    });
-
-    it('should require confirming again after the split returns to 100 and drops back below', () => {
-      modal = new AllocationModal(600000, timers, null);
-      modal.show();
-      choose('percentage-distribution');
-
-      setPercentages([50, 30]);
-      confirmDiscard();
-
-      setPercentages([50, 50]);
-      setPercentages([50, 30]);
-
-      expect(discardConfirm().checked, 'the stale confirmation is cleared').to.be.false;
-      expect(applyDisabled()).to.be.true;
-    });
-
-    it('should refuse a forced apply of a split whose leftover is unconfirmed', (done) => {
-      modal = new AllocationModal(600000, timers, null);
-      const promise = modal.show();
-      let resolved = false;
-      promise.then(() => { resolved = true; });
-
-      choose('percentage-distribution');
-      setPercentages([50, 30]);
-      document.querySelector('.allocation-modal button.btn-apply').disabled = false;
-      apply();
-
-      setTimeout(() => {
-        expect(resolved, 'nothing was allocated').to.be.false;
-        const error = document.querySelector('.allocation-modal .percentage-distribution-form .allocation-error');
-        expect(error.style.display).to.not.equal('none');
-        expect(error.textContent).to.include('20%');
-        done();
-      }, 50);
+      expect(totalText()).to.not.match(/discard/i);
     });
 
     it('should keep giving rounding dust to a timer when the split totals 100', (done) => {

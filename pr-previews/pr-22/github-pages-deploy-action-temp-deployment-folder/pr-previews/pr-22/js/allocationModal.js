@@ -17,7 +17,7 @@ const STRATEGY_COPY = {
   },
   'percentage-distribution': {
     name: 'Split by percentage',
-    description: 'Divide the time proportionally. A split short of 100% discards the rest, once you confirm.'
+    description: 'Divide the time proportionally. Anything short of 100% is discarded.'
   },
   'discard': {
     name: 'Discard it',
@@ -290,24 +290,6 @@ export class AllocationModal {
     return form;
   }
 
-  // Unallocated time is only thrown away on purpose, so a short split has to be confirmed
-  #createDiscardConfirmation() {
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = 'percentage-discard-checkbox';
-    checkbox.addEventListener('change', () => this.#updatePercentageValidation());
-
-    const text = document.createElement('span');
-    text.className = 'percentage-discard-text';
-
-    const label = document.createElement('label');
-    label.className = 'percentage-discard-label';
-    label.style.display = 'none';
-    label.appendChild(checkbox);
-    label.appendChild(text);
-    return label;
-  }
-
   #createPercentageDistributionForm() {
     const form = document.createElement('div');
     form.className = 'percentage-distribution-form strategy-detail';
@@ -342,8 +324,6 @@ export class AllocationModal {
 
       form.appendChild(row);
     });
-
-    form.appendChild(this.#createDiscardConfirmation());
 
     const totalContainer = document.createElement('div');
     totalContainer.className = 'percentage-validation';
@@ -401,46 +381,20 @@ export class AllocationModal {
     }
   }
 
-  #percentageLeftover(total) {
-    return total > 0 && total < 100 ? roundPercent(100 - total) : 0;
-  }
-
-  #isDiscardConfirmed() {
-    const checkbox = this.modalElement.querySelector('.percentage-distribution-form .percentage-discard-checkbox');
-    return Boolean(checkbox && checkbox.checked);
-  }
-
-  // A split may leave time unallocated, but only once the user has confirmed losing it;
-  // it may never promise more time than there is
+  // A split may leave time unallocated (that share is discarded); it may not promise more than there is
   #isPercentageApplicable(total) {
-    if (total <= 0 || total > 100) {
-      return false;
-    }
-    return this.#percentageLeftover(total) === 0 || this.#isDiscardConfirmed();
+    return total > 0 && total <= 100;
   }
 
   #updatePercentageValidation() {
     const form = this.modalElement.querySelector('.percentage-distribution-form');
     const total = this.#sumPercentageInputs();
-    const leftover = this.#percentageLeftover(total);
-
-    const confirmLabel = form.querySelector('.percentage-discard-label');
-    if (leftover > 0) {
-      form.querySelector('.percentage-discard-text').textContent = `Discard the remaining ${leftover}%`;
-      confirmLabel.style.display = 'flex';
-    } else {
-      // A tick left from an earlier split must not silently carry into the next one
-      form.querySelector('.percentage-discard-checkbox').checked = false;
-      confirmLabel.style.display = 'none';
-    }
-
     const applicable = this.#isPercentageApplicable(total);
 
     const totalDisplay = form.querySelector('.percentage-total');
     if (totalDisplay) {
-      const fate = this.#isDiscardConfirmed() ? 'discarded' : 'unallocated';
-      const leftoverText = leftover > 0 ? ` · ${leftover}% ${fate}` : '';
-      totalDisplay.textContent = `Total: ${roundPercent(total)}%${leftoverText}`;
+      const discarded = total > 0 && total < 100 ? ` · ${roundPercent(100 - total)}% discarded` : '';
+      totalDisplay.textContent = `Total: ${roundPercent(total)}%${discarded}`;
       totalDisplay.className = applicable ? 'percentage-total valid' : 'percentage-total invalid';
     }
 
@@ -496,23 +450,13 @@ export class AllocationModal {
     return true;
   }
 
-  #percentageProblem(total) {
-    if (total > 100) {
-      return `Percentages cannot add up to more than 100% (currently ${roundPercent(total)}%)`;
-    }
-    if (total <= 0) {
-      return 'Give at least one timer a percentage, or choose “Discard it”';
-    }
-
-    const leftover = this.#percentageLeftover(total);
-    return `${leftover}% is still unallocated — tick “Discard the remaining ${leftover}%” or split the whole 100%`;
-  }
-
   #validatePercentageAllocation() {
     const total = this.#sumPercentageInputs();
 
     if (!this.#isPercentageApplicable(total)) {
-      this.#showError('.percentage-distribution-form', this.#percentageProblem(total));
+      this.#showError('.percentage-distribution-form', total > 100
+        ? `Percentages cannot add up to more than 100% (currently ${roundPercent(total)}%)`
+        : 'Give at least one timer a percentage, or choose “Discard it”');
       return false;
     }
 
