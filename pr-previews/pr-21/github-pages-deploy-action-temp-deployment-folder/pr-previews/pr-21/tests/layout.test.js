@@ -618,46 +618,34 @@ describe('Layout and Overflow Tests', () => {
   });
 
   describe('Time added animation', () => {
-    const TIME_ADDED_ANIMATIONS = ['time-added-fill', 'time-added-glow', 'time-added-ring'];
-
-    function animationNames(card) {
-      return card.getAnimations({ subtree: true }).map(animation => animation.animationName).sort();
-    }
-
-    it('should raise a fill behind the card, glow the display and pulse a ring while time-added is set', () => {
+    it('should pulse a ring around the card and bump its display while time-added is set', () => {
       const card = createTestTimerCard();
       card.classList.add('time-added');
       document.getElementById('timer-container').appendChild(card);
 
-      expect(window.getComputedStyle(card, '::before').animationName).to.equal('time-added-fill');
-      expect(window.getComputedStyle(card, '::before').zIndex).to.equal('-1');
-      expect(window.getComputedStyle(card).isolation).to.equal('isolate');
-      expect(window.getComputedStyle(card.querySelector('.timer-display')).animationName).to.equal('time-added-glow');
       expect(window.getComputedStyle(card, '::after').animationName).to.equal('time-added-ring');
-      expect(animationNames(card)).to.deep.equal(TIME_ADDED_ANIMATIONS);
+      expect(window.getComputedStyle(card.querySelector('.timer-display')).animationName).to.equal('time-added-bump');
     });
 
-    it('should let the ring finish last so it can mark the end of the sequence', async () => {
+    it('should report the ring ending on the card itself once both animations finish', async () => {
       const card = createTestTimerCard();
       document.getElementById('timer-container').appendChild(card);
       card.classList.add('time-added');
 
-      const endedInOrder = await new Promise(resolve => {
-        const names = [];
+      const ended = new Promise(resolve => {
         card.addEventListener('animationend', e => {
-          names.push(e.animationName);
-          if (names.length === TIME_ADDED_ANIMATIONS.length) resolve(names);
+          if (e.target === card) resolve(e.animationName);
         });
       });
-      expect(endedInOrder[endedInOrder.length - 1]).to.equal('time-added-ring');
-      expect(animationNames(card)).to.deep.equal([]);
+      const names = card.getAnimations({ subtree: true }).map(animation => animation.animationName).sort();
+      expect(names).to.deep.equal(['time-added-bump', 'time-added-ring']);
+      expect(await ended).to.equal('time-added-ring');
     });
 
     it('should not animate a card that has not just received time', () => {
       const card = createTestTimerCard();
       document.getElementById('timer-container').appendChild(card);
 
-      expect(window.getComputedStyle(card, '::before').animationName).to.equal('none');
       expect(window.getComputedStyle(card, '::after').animationName).to.equal('none');
       expect(window.getComputedStyle(card.querySelector('.timer-display')).animationName).to.equal('none');
     });

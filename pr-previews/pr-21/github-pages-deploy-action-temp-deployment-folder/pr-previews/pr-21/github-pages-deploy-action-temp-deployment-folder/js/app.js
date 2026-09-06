@@ -10,9 +10,6 @@ import { namespacedKey } from './storageNamespace.js';
 const HIDDEN_RUNNING_TIMERS_KEY = 'app_hidden_running_timers';
 const GOAL_PLACEHOLDER = '25m, 2h, 1:30';
 const GOAL_ERROR_MESSAGE = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
-// How long the digits take to roll from the old time to the new one after idle
-// time lands on a card; the CSS ring is timed to pulse as the roll settles
-const TIME_ADDED_ROLL_MS = 1100;
 
 // A goal is a minimum to reach, a budget a maximum not to exceed; the same
 // progress machinery drives both, only the words and colours differ
@@ -72,9 +69,6 @@ export class App {
     // timer drops back below (reset, or a goal raised above the elapsed time)
     this.goalReachedTimers = new Set();
     this.lastDisplayedTotal = null;
-    // Idle time still rolling into a card's display: timer id -> { ms, startedAt }
-    this.timeAddedRolls = new Map();
-    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.rafId = null;
     this.draggingCard = null;
     // The goal editor whose controls the pointer last went down on, if any; a tap
@@ -172,7 +166,6 @@ export class App {
 
   #forgetCard(timerId) {
     this.timerElements.delete(timerId);
-    this.timeAddedRolls.delete(timerId);
     this.lastDisplayedValues.delete(timerId);
     this.lastDisplayedStates.delete(timerId);
     this.lastDisplayedGoals.delete(timerId);
@@ -249,15 +242,6 @@ export class App {
 
     card.addEventListener('dragstart', (e) => this.handleDragStart(e, card));
     card.addEventListener('dragend', (e) => this.handleDragEnd(e, card));
-    // The fill, glow and ring end at different times and all bubble up here; the
-    // class comes off once none of them is still playing
-    card.addEventListener('animationend', () => {
-      const stillPlaying = card.getAnimations({ subtree: true })
-        .some(animation => animation.animationName?.startsWith('time-added-'));
-      if (!stillPlaying) {
-        card.classList.remove('time-added');
-      }
-    });
 
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
@@ -733,24 +717,19 @@ export class App {
     const timers = this.timerManager.getAllTimers();
     let totalMs = 0;
     let runningTimerTicked = false;
-    const now = performance.now();
 
     timers.forEach(timer => {
       const elapsedMs = timer.getElapsedMs();
-      // While idle time rolls in, the display, the total and the goal bar lag
-      // the real elapsed time by the part not shown yet
-      const unrolledMs = this.#unrolledMs(timer.id, now);
-      const shownMs = elapsedMs - unrolledMs;
-      totalMs += shownMs;
+      totalMs += elapsedMs;
 
       const card = this.timerElements.get(timer.id);
       if (!card) return;
 
-      const newFormattedTime = formatDuration(shownMs);
+      const newFormattedTime = timer.getFormattedTime();
       if (newFormattedTime !== this.lastDisplayedValues.get(timer.id)) {
         card.querySelector('.timer-display').textContent = newFormattedTime;
         this.lastDisplayedValues.set(timer.id, newFormattedTime);
-        if (timer.isRunning() && unrolledMs === 0) {
+        if (timer.isRunning()) {
           runningTimerTicked = true;
         }
       }
@@ -759,9 +738,8 @@ export class App {
         this.applyTimerState(card, timer);
       }
 
-      const progress = this.#goalProgress(timer, shownMs);
-      // The notification is about the real crossing, not the animated one
-      this.#syncGoalReached(timer, timer.targetMs !== null && elapsedMs >= timer.targetMs, true);
+      const progress = this.#goalProgress(timer, elapsedMs);
+      this.#syncGoalReached(timer, progress.reached, true);
       if (this.#goalKey(progress) !== this.lastDisplayedGoals.get(timer.id)) {
         this.applyGoalState(card, timer, progress);
       }
@@ -953,11 +931,6 @@ export class App {
       const allocations = this.buildAllocations(result);
       if (allocations.size > 0) {
         this.timerManager.distributeTime(allocations);
-        allocations.forEach((ms, timerId) => {
-          if (ms > 0) {
-            this.#animateTimeAdded(timerId, ms);
-          }
-        });
       }
     } catch (error) {
       console.error('Failed to allocate idle time:', error);
@@ -966,47 +939,6 @@ export class App {
       this.hiddenRunningTimers = new Set(resumeId ? [resumeId] : []);
       this.handleResume();
     }
-  }
-
-  /**
-   * Play the "time added" sequence on a timer's card and start rolling the added
-   * time into its display
-   * @param {string} timerId - Timer that just received idle time
-   * @param {number} ms - Amount it received
-   */
-  #animateTimeAdded(timerId, ms) {
-    const card = this.timerElements.get(timerId);
-    if (!card || this.reducedMotion) return;
-
-    // Re-adding the class only restarts the animations after a reflow, and the
-    // class may still be on the card from a run that is playing
-    card.classList.remove('time-added');
-    void card.offsetWidth;
-    card.classList.add('time-added');
-
-    // A roll still in flight carries what it has not shown yet into the new one,
-    // so the digits never jump
-    const now = performance.now();
-    this.timeAddedRolls.set(timerId, { ms: ms + this.#unrolledMs(timerId, now), startedAt: now });
-  }
-
-  /**
-   * The part of a card's added time that its display does not show yet
-   * @param {string} timerId - Timer to check
-   * @param {number} now - performance.now() for this frame
-   * @returns {number}
-   */
-  #unrolledMs(timerId, now) {
-    const roll = this.timeAddedRolls.get(timerId);
-    if (!roll) return 0;
-
-    const progress = Math.min(1, (now - roll.startedAt) / TIME_ADDED_ROLL_MS);
-    if (progress === 1) {
-      this.timeAddedRolls.delete(timerId);
-      return 0;
-    }
-    // Ease out: the digits race at first and settle gently onto the final value
-    return roll.ms * (1 - progress) ** 3;
   }
 
   /**
