@@ -58,12 +58,36 @@ describe('Layout and Overflow Tests', () => {
 
     const goalBtn = document.createElement('button');
     goalBtn.className = 'timer-goal-btn';
-    goalBtn.textContent = 'Set goal';
+    goalBtn.textContent = 'Set goal or budget';
+
+    const goalEditor = document.createElement('div');
+    goalEditor.className = 'timer-goal-editor';
+    goalEditor.hidden = true;
+
+    const goalKind = document.createElement('div');
+    goalKind.className = 'timer-goal-kind';
+    goalKind.setAttribute('role', 'radiogroup');
+    ['goal', 'budget'].forEach(kind => {
+      const label = document.createElement('label');
+      label.className = 'timer-goal-kind-option';
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'goal-kind-layout';
+      radio.value = kind;
+      radio.checked = kind === 'goal';
+      const text = document.createElement('span');
+      text.textContent = kind === 'goal' ? 'Goal' : 'Budget';
+      label.appendChild(radio);
+      label.appendChild(text);
+      goalKind.appendChild(label);
+    });
 
     const goalInput = document.createElement('input');
     goalInput.type = 'text';
     goalInput.className = 'timer-goal-input';
-    goalInput.hidden = true;
+
+    goalEditor.appendChild(goalKind);
+    goalEditor.appendChild(goalInput);
 
     const progress = document.createElement('div');
     progress.className = 'timer-progress';
@@ -78,7 +102,7 @@ describe('Layout and Overflow Tests', () => {
     goalError.hidden = true;
 
     goal.appendChild(goalBtn);
-    goal.appendChild(goalInput);
+    goal.appendChild(goalEditor);
     goal.appendChild(goalError);
     goal.appendChild(progress);
 
@@ -111,14 +135,18 @@ describe('Layout and Overflow Tests', () => {
   function createInvalidGoalCard() {
     const card = createTestTimerCard();
     card.querySelector('.timer-goal-btn').hidden = true;
+    card.querySelector('.timer-goal-editor').hidden = false;
     const input = card.querySelector('.timer-goal-input');
-    input.hidden = false;
     input.value = 'soon';
     input.classList.add('is-invalid');
     const error = card.querySelector('.timer-goal-error');
     error.hidden = false;
-    error.textContent = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+    error.textContent = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
     return card;
+  }
+
+  function createBudgetCard(chipText = 'Budget 02:00:00') {
+    return createGoalCard(chipText);
   }
 
   // Resolves a token like --danger to the rgb() string computed styles report
@@ -129,6 +157,21 @@ describe('Layout and Overflow Tests', () => {
     const color = window.getComputedStyle(probe).color;
     probe.remove();
     return color;
+  }
+
+  // Plain colours compute to rgb(); color-mix() results compute to color(srgb r g b) on a 0-1 scale
+  function rgbChannels(color) {
+    const rgb = /^rgba?\((\d+), (\d+), (\d+)/.exec(color);
+    if (rgb) return rgb.slice(1, 4).map(Number);
+    const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/.exec(color);
+    expect(srgb, `${color} should be an rgb() or color(srgb) colour`).to.not.be.null;
+    return srgb.slice(1, 4).map(value => Math.round(Number(value) * 255));
+  }
+
+  function expectGreen(color, label) {
+    const [r, g, b] = rgbChannels(color);
+    expect(g, `${label} ${color} should lean green`).to.be.greaterThan(r);
+    expect(g, `${label} ${color} should lean green`).to.be.greaterThan(b);
   }
 
   describe('Text overflow on small windows', () => {
@@ -382,7 +425,7 @@ describe('Layout and Overflow Tests', () => {
       goalBtn.hidden = true;
 
       expect(window.getComputedStyle(goalBtn).display).to.equal('none');
-      expect(window.getComputedStyle(card.querySelector('.timer-goal-input')).display).to.equal('none');
+      expect(window.getComputedStyle(card.querySelector('.timer-goal-editor')).display).to.equal('none');
       expect(window.getComputedStyle(card.querySelector('.timer-progress')).display).to.equal('none');
     });
 
@@ -412,22 +455,22 @@ describe('Layout and Overflow Tests', () => {
     it('should switch the bar colour when the card is over target', () => {
       const timerContainer = document.getElementById('timer-container');
       const underTarget = createGoalCard();
-      const overTarget = createGoalCard('Goal 02:00:00 · reached');
+      const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       overTarget.classList.add('over-target');
       timerContainer.appendChild(underTarget);
       timerContainer.appendChild(overTarget);
 
-      const underColor = window.getComputedStyle(underTarget.querySelector('.timer-progress-bar')).backgroundColor;
-      const overColor = window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor;
+      const underColor = rgbChannels(window.getComputedStyle(underTarget.querySelector('.timer-progress-bar')).backgroundColor);
+      const overColor = rgbChannels(window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor);
 
-      expect(overColor).to.not.equal(underColor);
-      expect(overColor).to.not.equal('rgba(0, 0, 0, 0)');
+      expect(overColor).to.not.deep.equal(underColor);
+      expect(overColor).to.not.deep.equal([0, 0, 0]);
     });
 
     it('should style the reached chip differently from a pending chip', () => {
       const timerContainer = document.getElementById('timer-container');
       const pending = createGoalCard();
-      const reached = createGoalCard('Goal 02:00:00 · reached');
+      const reached = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       reached.classList.add('over-target');
       timerContainer.appendChild(pending);
       timerContainer.appendChild(reached);
@@ -476,19 +519,101 @@ describe('Layout and Overflow Tests', () => {
       expect(errorRect.height).to.be.greaterThan(errorRect.width / 8, 'message should wrap onto more than one line');
     });
 
-    it('should keep the chip and input inside the card on a narrow layout', () => {
-      const card = createGoalCard('Goal 125:00:00 · reached');
-      card.querySelector('.timer-goal-input').hidden = false;
+    it('should keep the chip and editor inside the card on a narrow layout', () => {
+      const card = createGoalCard('Budget 125:00:00 · 00:00:42 over');
+      card.querySelector('.timer-goal-editor').hidden = false;
       const timerContainer = document.getElementById('timer-container');
       timerContainer.style.width = '250px';
       timerContainer.appendChild(card);
 
       const cardRect = card.getBoundingClientRect();
-      ['.timer-goal-btn', '.timer-goal-input', '.timer-progress'].forEach(selector => {
+      ['.timer-goal-btn', '.timer-goal-kind', '.timer-goal-input', '.timer-progress'].forEach(selector => {
         const rect = card.querySelector(selector).getBoundingClientRect();
         expect(rect.right).to.be.at.most(cardRect.right + 1, `${selector} should stay inside the card`);
         expect(rect.left).to.be.at.least(cardRect.left - 1, `${selector} should stay inside the card`);
       });
+    });
+
+    it('should lay the kind toggle out as two visible, clickable options', () => {
+      const card = createGoalCard();
+      card.querySelector('.timer-goal-editor').hidden = false;
+      document.getElementById('timer-container').appendChild(card);
+
+      const options = card.querySelectorAll('.timer-goal-kind-option');
+      expect(options).to.have.lengthOf(2);
+      options.forEach(option => {
+        const rect = option.getBoundingClientRect();
+        expect(rect.width).to.be.greaterThan(30);
+        expect(rect.height).to.be.at.least(24);
+      });
+
+      const checked = window.getComputedStyle(options[0]);
+      const unchecked = window.getComputedStyle(options[1]);
+      expect(checked.backgroundColor).to.not.equal(unchecked.backgroundColor);
+    });
+
+    it('should colour an exceeded budget differently from a reached goal and from pending', () => {
+      const timerContainer = document.getElementById('timer-container');
+      const pending = createBudgetCard();
+      const overBudget = createBudgetCard('Budget 02:00:00 · 00:10:00 over');
+      overBudget.classList.add('over-budget');
+      const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
+      overTarget.classList.add('over-target');
+      timerContainer.appendChild(pending);
+      timerContainer.appendChild(overBudget);
+      timerContainer.appendChild(overTarget);
+      const danger = computedToken('--danger');
+
+      const barColor = card => rgbChannels(window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor);
+      const chipColor = card => window.getComputedStyle(card.querySelector('.timer-goal-btn')).color;
+
+      expect(barColor(overBudget)).to.deep.equal(rgbChannels(danger));
+      expect(barColor(overBudget)).to.not.deep.equal(barColor(pending));
+      expect(barColor(overBudget)).to.not.deep.equal(barColor(overTarget));
+      expect(chipColor(overBudget)).to.equal(danger);
+      expect(chipColor(overBudget)).to.not.equal(chipColor(pending));
+      expect(chipColor(overBudget)).to.not.equal(chipColor(overTarget));
+    });
+
+    it('should colour a reached goal green, not amber', () => {
+      const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
+      overTarget.classList.add('over-target');
+      document.getElementById('timer-container').appendChild(overTarget);
+
+      expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor, 'bar');
+      expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-goal-btn')).color, 'chip');
+      expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-goal-btn')).borderColor, 'chip border');
+    });
+
+    it('should heat the budget bar from the accent to red as --budget-heat rises', () => {
+      const timerContainer = document.getElementById('timer-container');
+      const atHeat = heat => {
+        const card = createBudgetCard();
+        card.querySelector('.timer-progress-bar').style.setProperty('--budget-heat', heat);
+        timerContainer.appendChild(card);
+        return window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor;
+      };
+      const accent = computedToken('--accent');
+      const danger = computedToken('--danger');
+
+      const cold = rgbChannels(atHeat('0%'));
+      const warm = rgbChannels(atHeat('50%'));
+      const hot = rgbChannels(atHeat('100%'));
+      const unsetCard = createBudgetCard();
+      timerContainer.appendChild(unsetCard);
+      const unset = rgbChannels(window.getComputedStyle(unsetCard.querySelector('.timer-progress-bar')).backgroundColor);
+
+      expect(cold).to.deep.equal(rgbChannels(accent));
+      expect(hot).to.deep.equal(rgbChannels(danger));
+      expect(warm).to.not.deep.equal(cold);
+      expect(warm).to.not.deep.equal(hot);
+      const [coldR] = cold;
+      const [warmR, warmG] = warm;
+      const [hotR, , hotB] = hot;
+      expect(warmR).to.be.at.least(coldR);
+      expect(warmG).to.be.greaterThan(hotB, 'the midpoint should still read warm, not red');
+      expect(hotR).to.be.greaterThan(warmG);
+      expect(unset, 'a bar without the property is the plain accent').to.deep.equal(rgbChannels(accent));
     });
   });
 

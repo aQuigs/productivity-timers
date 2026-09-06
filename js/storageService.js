@@ -213,6 +213,13 @@ export class StorageService {
       return false;
     }
 
+    // Validate targetKind (must be absent, null, or a supported kind)
+    if (timer.targetKind !== undefined &&
+        timer.targetKind !== null &&
+        !Timer.TARGET_KINDS.includes(timer.targetKind)) {
+      return false;
+    }
+
     return true;
   }
 }

@@ -154,6 +154,41 @@ describe('StorageService', () => {
       expect(storage.validateState(stateWithTarget(NaN))).to.be.false;
       expect(storage.validateState(stateWithTarget(Infinity))).to.be.false;
     });
+
+    describe('targetKind', () => {
+      function stateWithKind(targetKind, targetMs = 1500000) {
+        return {
+          timers: [
+            { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped', targetMs, targetKind }
+          ],
+          runningTimerId: null
+        };
+      }
+
+      it('should save and load a goal or budget kind', () => {
+        expect(storage.save(stateWithKind('budget'))).to.be.true;
+        expect(storage.load().timers[0].targetKind).to.equal('budget');
+        expect(storage.save(stateWithKind('goal'))).to.be.true;
+        expect(storage.load().timers[0].targetKind).to.equal('goal');
+      });
+
+      it('should accept a null or absent targetKind', () => {
+        expect(storage.validateState(stateWithKind(null))).to.be.true;
+        expect(storage.validateState(stateWithTarget(1500000))).to.be.true;
+      });
+
+      it('should reject an unknown targetKind', () => {
+        expect(storage.validateState(stateWithKind('limit'))).to.be.false;
+        expect(storage.validateState(stateWithKind('Goal'))).to.be.false;
+        expect(storage.validateState(stateWithKind(''))).to.be.false;
+      });
+
+      it('should reject a non-string targetKind', () => {
+        expect(storage.validateState(stateWithKind(1))).to.be.false;
+        expect(storage.validateState(stateWithKind(true))).to.be.false;
+        expect(storage.validateState(stateWithKind({}))).to.be.false;
+      });
+    });
   });
 
   describe('Constructor', () => {

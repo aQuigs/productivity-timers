@@ -7,12 +7,18 @@ import { formatDuration } from './formatDuration.js';
 export class Timer {
   static VALID_STATES = ['stopped', 'paused', 'running'];
 
+  /**
+   * A goal is a minimum to reach; a budget is a maximum not to exceed
+   */
+  static TARGET_KINDS = ['goal', 'budget'];
+
   #id;
   #title;
   #elapsedMs;
   #state;
   #startTimeMs;
   #targetMs;
+  #targetKind;
 
   static #validateTarget(value) {
     if (typeof value !== 'number' || !Number.isInteger(value)) {
@@ -20,6 +26,15 @@ export class Timer {
     }
     if (value <= 0) {
       throw new RangeError('Target must be positive');
+    }
+  }
+
+  static #validateTargetKind(kind) {
+    if (typeof kind !== 'string') {
+      throw new TypeError("Target kind must be 'goal' or 'budget'");
+    }
+    if (!Timer.TARGET_KINDS.includes(kind)) {
+      throw new RangeError("Target kind must be 'goal' or 'budget'");
     }
   }
 
@@ -49,6 +64,7 @@ export class Timer {
     this.#state = 'stopped';
     this.#startTimeMs = null;
     this.#targetMs = null;
+    this.#targetKind = null;
   }
 
   /**
@@ -96,27 +112,42 @@ export class Timer {
   }
 
   /**
-   * Optional goal in milliseconds; null when the timer has no goal
+   * Optional goal or budget in milliseconds; null when the timer has no target
    */
   get targetMs() {
     return this.#targetMs;
   }
 
   /**
-   * Sets or clears the goal
-   * @param {number|null} ms - Positive integer milliseconds, or null for no goal
-   * @throws {TypeError} If ms is neither null nor an integer
-   * @throws {RangeError} If ms is not positive
+   * 'goal' or 'budget' while a target is set, otherwise null
    */
-  setTarget(ms) {
-    if (ms !== null) {
-      Timer.#validateTarget(ms);
-    }
-    this.#targetMs = ms;
+  get targetKind() {
+    return this.#targetKind;
   }
 
   /**
-   * Whether elapsed time has met the goal; always false without a goal
+   * Sets or clears the target
+   * @param {number|null} ms - Positive integer milliseconds, or null to clear
+   * @param {'goal'|'budget'} [kind='goal'] - Ignored when clearing
+   * @throws {TypeError} If ms is neither null nor an integer, or kind is not a string
+   * @throws {RangeError} If ms is not positive or kind is unknown
+   */
+  setTarget(ms, kind = 'goal') {
+    if (ms === null) {
+      this.#targetMs = null;
+      this.#targetKind = null;
+      return;
+    }
+
+    Timer.#validateTarget(ms);
+    Timer.#validateTargetKind(kind);
+    this.#targetMs = ms;
+    this.#targetKind = kind;
+  }
+
+  /**
+   * Whether elapsed time has met the target (reached a goal, or used up a budget);
+   * always false without a target
    */
   hasReachedTarget() {
     return this.#targetMs !== null && this.getElapsedMs() >= this.#targetMs;
@@ -216,7 +247,8 @@ export class Timer {
       title: this.#title,
       elapsedMs: currentElapsed,
       state: normalizedState,
-      targetMs: this.#targetMs
+      targetMs: this.#targetMs,
+      targetKind: this.#targetKind
     };
   }
 
@@ -254,12 +286,13 @@ export class Timer {
     const timer = new Timer(data.title, data.id);
     timer.#elapsedMs = data.elapsedMs;
 
-    // Absent in state saved before goals existed
+    // Absent in state saved before goals existed; the kind is absent in state
+    // saved before budgets existed, when every target was a goal
     if (data.targetMs !== undefined && data.targetMs !== null) {
       try {
-        timer.setTarget(data.targetMs);
+        timer.setTarget(data.targetMs, data.targetKind ?? 'goal');
       } catch (error) {
-        throw new Error('Timer data must have a valid targetMs');
+        throw new Error('Timer data must have a valid targetMs and targetKind');
       }
     }
 
