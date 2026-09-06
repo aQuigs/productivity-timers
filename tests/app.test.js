@@ -1097,11 +1097,62 @@ describe('App', () => {
 
         expect(card.classList.contains('over-target')).to.be.true;
         expect(progressBar(card).style.width).to.equal('100%');
-        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
 
         timer.addMs(TEN_SECONDS);
         app.updateAllTimerDisplays();
         expect(progressBar(card).style.width).to.equal('100%');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:10 over');
+      });
+
+      it('should count the time over the goal up once a second', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(TEN_SECONDS);
+        app.updateAllTimerDisplays();
+
+        timer.addMs(999);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
+
+        timer.addMs(1);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:01 over');
+
+        timer.addMs(59 * 1000);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:01:00 over');
+      });
+
+      it('should describe the overage to assistive tech only while over the goal', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(TEN_SECONDS - 1000);
+        app.updateAllTimerDisplays();
+        expect(progress(card).hasAttribute('aria-valuetext')).to.be.false;
+
+        timer.addMs(3000);
+        app.updateAllTimerDisplays();
+        expect(progress(card).getAttribute('aria-valuenow')).to.equal('100');
+        expect(progress(card).getAttribute('aria-valuetext')).to.equal('00:00:02 over goal');
+
+        document.getElementById('reset-all-btn').click();
+        expect(progress(card).hasAttribute('aria-valuetext')).to.be.false;
+      });
+
+      it('should not heat a goal bar however close it gets', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(9500);
+        app.updateAllTimerDisplays();
+
+        expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('');
       });
 
       it('should not touch the DOM on later frames while staying over the goal', () => {
@@ -1215,7 +1266,7 @@ describe('App', () => {
 
         const card = firstCard();
         expect(card.classList.contains('over-target')).to.be.true;
-        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:10 over');
         expect(notifier.notifications).to.have.lengthOf(0);
       });
 
@@ -1525,7 +1576,59 @@ describe('App', () => {
           expect(card.classList.contains('over-budget')).to.be.true;
           expect(card.classList.contains('over-target')).to.be.false;
           expect(progressBar(card).style.width).to.equal('100%');
-          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · exceeded');
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:00 over');
+
+          timer.addMs(42 * 1000);
+          app.updateAllTimerDisplays();
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:42 over');
+          expect(progress(card).getAttribute('aria-valuetext')).to.equal('00:00:42 over budget');
+        });
+
+        it('should heat the bar through the second half of the budget', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '100s');
+          const heat = () => progressBar(card).style.getPropertyValue('--budget-heat');
+
+          timer.addMs(40 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('0%');
+
+          timer.addMs(10 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('0%');
+
+          timer.addMs(25 * 1000);
+          app.updateAllTimerDisplays();
+          expect(progressBar(card).style.width).to.equal('75%');
+          expect(heat()).to.equal('50%');
+
+          timer.addMs(20 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('90%');
+
+          timer.addMs(5 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('100%');
+          expect(card.classList.contains('over-budget')).to.be.true;
+
+          document.getElementById('reset-all-btn').click();
+          expect(heat()).to.equal('0%');
+        });
+
+        it('should cool the bar when a budget becomes a goal', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '100s');
+          timer.addMs(90 * 1000);
+          app.updateAllTimerDisplays();
+          expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('80%');
+
+          enterTarget(card, 'goal', '100s');
+
+          expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('');
         });
 
         it('should never mark a goal card as over budget', () => {
@@ -1555,7 +1658,7 @@ describe('App', () => {
 
           expect(card.classList.contains('over-budget')).to.be.false;
           expect(card.classList.contains('over-target')).to.be.true;
-          expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+          expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
           expect(notifier.notifications).to.have.lengthOf(1);
         });
 
@@ -1604,7 +1707,7 @@ describe('App', () => {
           app.updateAllTimerDisplays();
 
           expect(card.classList.contains('over-budget')).to.be.true;
-          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · exceeded');
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:10 over');
           expect(notifier.notifications).to.have.lengthOf(0);
         });
       });

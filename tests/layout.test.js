@@ -159,6 +159,21 @@ describe('Layout and Overflow Tests', () => {
     return color;
   }
 
+  // Plain colours compute to rgb(); color-mix() results compute to color(srgb r g b) on a 0-1 scale
+  function rgbChannels(color) {
+    const rgb = /^rgba?\((\d+), (\d+), (\d+)/.exec(color);
+    if (rgb) return rgb.slice(1, 4).map(Number);
+    const srgb = /^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/.exec(color);
+    expect(srgb, `${color} should be an rgb() or color(srgb) colour`).to.not.be.null;
+    return srgb.slice(1, 4).map(value => Math.round(Number(value) * 255));
+  }
+
+  function expectGreen(color, label) {
+    const [r, g, b] = rgbChannels(color);
+    expect(g, `${label} ${color} should lean green`).to.be.greaterThan(r);
+    expect(g, `${label} ${color} should lean green`).to.be.greaterThan(b);
+  }
+
   describe('Text overflow on small windows', () => {
     it('should not allow timer display text to overflow card on small window', () => {
       const card = createTestTimerCard('Timer 1', '99:59:59');
@@ -440,22 +455,22 @@ describe('Layout and Overflow Tests', () => {
     it('should switch the bar colour when the card is over target', () => {
       const timerContainer = document.getElementById('timer-container');
       const underTarget = createGoalCard();
-      const overTarget = createGoalCard('Goal 02:00:00 · reached');
+      const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       overTarget.classList.add('over-target');
       timerContainer.appendChild(underTarget);
       timerContainer.appendChild(overTarget);
 
-      const underColor = window.getComputedStyle(underTarget.querySelector('.timer-progress-bar')).backgroundColor;
-      const overColor = window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor;
+      const underColor = rgbChannels(window.getComputedStyle(underTarget.querySelector('.timer-progress-bar')).backgroundColor);
+      const overColor = rgbChannels(window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor);
 
-      expect(overColor).to.not.equal(underColor);
-      expect(overColor).to.not.equal('rgba(0, 0, 0, 0)');
+      expect(overColor).to.not.deep.equal(underColor);
+      expect(overColor).to.not.deep.equal([0, 0, 0]);
     });
 
     it('should style the reached chip differently from a pending chip', () => {
       const timerContainer = document.getElementById('timer-container');
       const pending = createGoalCard();
-      const reached = createGoalCard('Goal 02:00:00 · reached');
+      const reached = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       reached.classList.add('over-target');
       timerContainer.appendChild(pending);
       timerContainer.appendChild(reached);
@@ -505,7 +520,7 @@ describe('Layout and Overflow Tests', () => {
     });
 
     it('should keep the chip and editor inside the card on a narrow layout', () => {
-      const card = createGoalCard('Budget 125:00:00 · exceeded');
+      const card = createGoalCard('Budget 125:00:00 · 00:00:42 over');
       card.querySelector('.timer-goal-editor').hidden = false;
       const timerContainer = document.getElementById('timer-container');
       timerContainer.style.width = '250px';
@@ -540,24 +555,65 @@ describe('Layout and Overflow Tests', () => {
     it('should colour an exceeded budget differently from a reached goal and from pending', () => {
       const timerContainer = document.getElementById('timer-container');
       const pending = createBudgetCard();
-      const overBudget = createBudgetCard('Budget 02:00:00 · exceeded');
+      const overBudget = createBudgetCard('Budget 02:00:00 · 00:10:00 over');
       overBudget.classList.add('over-budget');
-      const overTarget = createGoalCard('Goal 02:00:00 · reached');
+      const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       overTarget.classList.add('over-target');
       timerContainer.appendChild(pending);
       timerContainer.appendChild(overBudget);
       timerContainer.appendChild(overTarget);
       const danger = computedToken('--danger');
 
-      const barColor = card => window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor;
+      const barColor = card => rgbChannels(window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor);
       const chipColor = card => window.getComputedStyle(card.querySelector('.timer-goal-btn')).color;
 
-      expect(barColor(overBudget)).to.equal(danger);
-      expect(barColor(overBudget)).to.not.equal(barColor(pending));
-      expect(barColor(overBudget)).to.not.equal(barColor(overTarget));
+      expect(barColor(overBudget)).to.deep.equal(rgbChannels(danger));
+      expect(barColor(overBudget)).to.not.deep.equal(barColor(pending));
+      expect(barColor(overBudget)).to.not.deep.equal(barColor(overTarget));
       expect(chipColor(overBudget)).to.equal(danger);
       expect(chipColor(overBudget)).to.not.equal(chipColor(pending));
       expect(chipColor(overBudget)).to.not.equal(chipColor(overTarget));
+    });
+
+    it('should colour a reached goal green, not amber', () => {
+      const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
+      overTarget.classList.add('over-target');
+      document.getElementById('timer-container').appendChild(overTarget);
+
+      expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor, 'bar');
+      expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-goal-btn')).color, 'chip');
+      expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-goal-btn')).borderColor, 'chip border');
+    });
+
+    it('should heat the budget bar from the accent to red as --budget-heat rises', () => {
+      const timerContainer = document.getElementById('timer-container');
+      const atHeat = heat => {
+        const card = createBudgetCard();
+        card.querySelector('.timer-progress-bar').style.setProperty('--budget-heat', heat);
+        timerContainer.appendChild(card);
+        return window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor;
+      };
+      const accent = computedToken('--accent');
+      const danger = computedToken('--danger');
+
+      const cold = rgbChannels(atHeat('0%'));
+      const warm = rgbChannels(atHeat('50%'));
+      const hot = rgbChannels(atHeat('100%'));
+      const unsetCard = createBudgetCard();
+      timerContainer.appendChild(unsetCard);
+      const unset = rgbChannels(window.getComputedStyle(unsetCard.querySelector('.timer-progress-bar')).backgroundColor);
+
+      expect(cold).to.deep.equal(rgbChannels(accent));
+      expect(hot).to.deep.equal(rgbChannels(danger));
+      expect(warm).to.not.deep.equal(cold);
+      expect(warm).to.not.deep.equal(hot);
+      const [coldR] = cold;
+      const [warmR, warmG] = warm;
+      const [hotR, , hotB] = hot;
+      expect(warmR).to.be.at.least(coldR);
+      expect(warmG).to.be.greaterThan(hotB, 'the midpoint should still read warm, not red');
+      expect(hotR).to.be.greaterThan(warmG);
+      expect(unset, 'a bar without the property is the plain accent').to.deep.equal(rgbChannels(accent));
     });
   });
 

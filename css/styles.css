@@ -26,10 +26,10 @@
     --danger-line: rgba(239, 68, 68, 0.45);
     --ok: #4ade80;
 
-    --goal: #fbbf24;
-    --goal-text: #fcd34d;
-    --goal-soft: rgba(251, 191, 36, 0.12);
-    --goal-line: rgba(251, 191, 36, 0.45);
+    --goal: var(--ok);
+    --goal-text: #86efac;
+    --goal-soft: rgba(74, 222, 128, 0.12);
+    --goal-line: rgba(74, 222, 128, 0.45);
 
     --primary-bg: #f4f4f5;
     --primary-ink: #0c0d10;
@@ -77,10 +77,9 @@
         --danger-line: rgba(220, 38, 38, 0.5);
         --ok: #16a34a;
 
-        --goal: #d97706;
-        --goal-text: #b45309;
-        --goal-soft: rgba(217, 119, 6, 0.12);
-        --goal-line: rgba(217, 119, 6, 0.5);
+        --goal-text: #15803d;
+        --goal-soft: rgba(22, 163, 74, 0.12);
+        --goal-line: rgba(22, 163, 74, 0.5);
 
         --primary-bg: #18181b;
         --primary-ink: #fafafa;
@@ -668,11 +667,12 @@ button {
     overflow: hidden;
 }
 
+/* --budget-heat (0% to 100%) is set by the app on budget bars only, so goal bars stay pure accent */
 .timer-progress-bar {
     width: 0;
     height: 100%;
     border-radius: inherit;
-    background: var(--accent);
+    background: color-mix(in srgb, var(--accent), var(--danger) var(--budget-heat, 0%));
     transition: width 0.25s var(--ease), background-color 0.2s var(--ease);
 }
 
