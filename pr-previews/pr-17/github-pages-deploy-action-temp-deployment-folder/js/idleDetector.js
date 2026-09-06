@@ -12,28 +12,29 @@ function readIdleMs(key) {
 }
 
 /**
- * IdleDetector - Measures time the page was not being watched (tab hidden, closed,
- * or the machine asleep) using a heartbeat timestamp in localStorage
+ * IdleDetector - Measures time the page was not being watched (tab hidden, window
+ * unfocused, closed, or the machine asleep) using a heartbeat timestamp in localStorage
  */
 class IdleDetector {
   /**
    * @param {Object} [options]
    * @param {Function} [options.callback] - Called with the total when it exceeds the threshold
-   * @param {Function} [options.onHidden] - Called when the document becomes hidden
-   * @param {Function} [options.onVisible] - Called with the accumulated total on every return
+   * @param {Function} [options.onInactive] - Called when the page stops being watched
+   * @param {Function} [options.onActive] - Called with the accumulated total on every return
    * @param {number} [options.idleThreshold]
    * @param {number} [options.heartbeatInterval]
    */
   constructor(options = {}) {
     this.callback = options.callback || noop;
-    this.onHidden = options.onHidden || noop;
-    this.onVisible = options.onVisible || noop;
+    this.onInactive = options.onInactive || noop;
+    this.onActive = options.onActive || noop;
     this.idleThreshold = options.idleThreshold || DEFAULT_IDLE_THRESHOLD_MS;
     this.heartbeatInterval = options.heartbeatInterval || 1000;
     this.heartbeatTimer = null;
     this.accumulatedIdleKey = namespacedKey(ACCUMULATED_IDLE_KEY);
     this.lastHeartbeatKey = namespacedKey(LAST_HEARTBEAT_KEY);
-    this.boundHandleVisibilityChange = () => this.handleVisibilityChange();
+    this.active = false;
+    this.boundHandleActivityChange = () => this.handleActivityChange();
     this.init();
   }
 
@@ -45,28 +46,47 @@ class IdleDetector {
     return readIdleMs(namespacedKey(ACCUMULATED_IDLE_KEY));
   }
 
+  /**
+   * Whether the page is being watched: visible, and its window is the focused one
+   * @returns {boolean}
+   */
+  isActive() {
+    return !document.hidden && document.hasFocus();
+  }
+
   init() {
     // Catch idle time that elapsed before this page load (tab closed, crash, sleep)
     this.checkIdle();
 
-    if (!document.hidden) {
+    this.active = this.isActive();
+    if (this.active) {
       this.startHeartbeat();
     }
 
-    document.addEventListener('visibilitychange', this.boundHandleVisibilityChange);
+    document.addEventListener('visibilitychange', this.boundHandleActivityChange);
+    // Switching to another app leaves the tab visible but takes focus from its window
+    window.addEventListener('blur', this.boundHandleActivityChange);
+    window.addEventListener('focus', this.boundHandleActivityChange);
   }
 
-  handleVisibilityChange() {
-    if (document.hidden) {
-      // Freeze the heartbeat so the next check measures the whole hidden period
+  handleActivityChange() {
+    const active = this.isActive();
+    // A tab switch fires both blur and visibilitychange; only the first may transition
+    if (active === this.active) {
+      return;
+    }
+    this.active = active;
+
+    if (!active) {
+      // Freeze the heartbeat so the next check measures the whole inactive period
       // instead of the time since a background-throttled tick
       this.updateHeartbeat();
       this.stopHeartbeat();
-      this.onHidden();
+      this.onInactive();
     } else {
       const total = this.checkIdle();
       this.startHeartbeat();
-      this.onVisible(total);
+      this.onActive(total);
     }
   }
 
@@ -130,7 +150,9 @@ class IdleDetector {
 
   destroy() {
     this.stopHeartbeat();
-    document.removeEventListener('visibilitychange', this.boundHandleVisibilityChange);
+    document.removeEventListener('visibilitychange', this.boundHandleActivityChange);
+    window.removeEventListener('blur', this.boundHandleActivityChange);
+    window.removeEventListener('focus', this.boundHandleActivityChange);
   }
 }
 

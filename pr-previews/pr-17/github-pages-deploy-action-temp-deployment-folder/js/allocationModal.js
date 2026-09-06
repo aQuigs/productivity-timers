@@ -96,6 +96,19 @@ export class AllocationModal {
     }
   }
 
+  #strategyCopy(value) {
+    const copy = STRATEGY_COPY[value];
+    if (value !== 'previous-timer') {
+      return copy;
+    }
+    if (!this.previousRunningId) {
+      return { ...copy, description: 'No timer was running when you stepped away.' };
+    }
+
+    const previousTimer = this.timers.find(timer => timer.id === this.previousRunningId);
+    return previousTimer ? { ...copy, name: `Add all to “${previousTimer.title}”` } : copy;
+  }
+
   #createStrategyOption(value, disabled = false) {
     const container = document.createElement('div');
     container.className = 'strategy-option';
@@ -111,13 +124,15 @@ export class AllocationModal {
     const text = document.createElement('span');
     text.className = 'strategy-text';
 
+    const copy = this.#strategyCopy(value);
+
     const name = document.createElement('span');
     name.className = 'strategy-name';
-    name.textContent = STRATEGY_COPY[value].name;
+    name.textContent = copy.name;
 
     const description = document.createElement('span');
     description.className = 'strategy-desc';
-    description.textContent = STRATEGY_COPY[value].description;
+    description.textContent = copy.description;
 
     text.appendChild(name);
     text.appendChild(description);
@@ -144,6 +159,21 @@ export class AllocationModal {
     });
 
     return select;
+  }
+
+  #createMakeRunningToggle() {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'make-running-checkbox';
+
+    const text = document.createElement('span');
+    text.textContent = 'Make this the running timer';
+
+    const label = document.createElement('label');
+    label.className = 'make-running-label';
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    return label;
   }
 
   #createStepButton(className, text, ariaLabel, onClick) {
@@ -363,6 +393,7 @@ export class AllocationModal {
     } else if (strategy === 'selected-timer') {
       const dropdown = this.modalElement.querySelector('select.timer-select');
       config.timerId = dropdown.value;
+      config.makeRunning = this.modalElement.querySelector('.make-running-checkbox').checked;
     } else if (strategy === 'fixed-distribution') {
       config.allocations = new Map(this.#readFixedRows().filter(([, ms]) => ms > 0));
       const remainderSelect = this.modalElement.querySelector('.fixed-distribution-form .remainder-timer-select');
@@ -518,6 +549,7 @@ export class AllocationModal {
       const timerDetail = document.createElement('div');
       timerDetail.className = 'strategy-detail timer-select-detail';
       timerDetail.appendChild(this.#createTimerDropdown());
+      timerDetail.appendChild(this.#createMakeRunningToggle());
       selectedOption.appendChild(timerDetail);
 
       const fixedOption = this.#createStrategyOption('fixed-distribution');

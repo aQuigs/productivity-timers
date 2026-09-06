@@ -1,7 +1,17 @@
 import { expect } from '@esm-bundle/chai';
 import { App } from '../js/app.js';
 import { TimerManager } from '../js/timerManager.js';
-import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo, atPreviewPath } from './helpers.js';
+import {
+  setHidden,
+  restoreHidden,
+  dispatchVisibilityChange,
+  setFocused,
+  restoreFocused,
+  dispatchWindowBlur,
+  dispatchWindowFocus,
+  heartbeatAgo,
+  atPreviewPath
+} from './helpers.js';
 
 describe('App', () => {
   let container;
@@ -88,6 +98,7 @@ describe('App', () => {
     }
     modals().forEach(el => el.remove());
     restoreHidden();
+    restoreFocused();
     container.remove();
     localStorage.clear();
   });
@@ -297,6 +308,61 @@ describe('App', () => {
       expect(localStorage.getItem('accumulated_idle_ms')).to.be.null;
       expect(app.allocationInProgress).to.be.false;
       expect(modals().length).to.equal(0);
+    });
+  });
+
+  describe('Window focus changes', () => {
+    function blurWindow() {
+      setFocused(false);
+      dispatchWindowBlur();
+    }
+
+    async function focusWindow() {
+      setFocused(true);
+      dispatchWindowFocus();
+      await tick();
+    }
+
+    it('should pause the running timer when the window loses focus and resume it when focus returns quickly', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      blurWindow();
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+
+      heartbeatAgo(5000);
+      await focusWindow();
+
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should show the allocation modal when focus returns after the idle threshold', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      blurWindow();
+      heartbeatAgo(15000);
+      await focusWindow();
+
+      expect(modals().length).to.equal(1);
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+
+      document.querySelector('.allocation-modal button.btn-cancel').click();
+      await tick();
+
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+    });
+
+    it('should pause a restored running timer when the app loads in an unfocused window', async () => {
+      const runningId = seedRunningTimer();
+      setFocused(false);
+
+      createApp();
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+
+      await focusWindow();
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
     });
   });
 
@@ -1216,6 +1282,64 @@ describe('App', () => {
         expect(localStorage.getItem('pr-12:last_heartbeat')).to.not.be.null;
         expect(localStorage.getItem('last_heartbeat')).to.be.null;
       });
+    });
+  });
+
+  describe('Allocating to a chosen timer', () => {
+    function applyToTimer(timerId, makeRunning) {
+      document.querySelector('.allocation-modal input[value="selected-timer"]').click();
+      document.querySelector('.allocation-modal select.timer-select').value = timerId;
+      const checkbox = document.querySelector('.allocation-modal input.make-running-checkbox');
+      if (checkbox.checked !== makeRunning) {
+        checkbox.click();
+      }
+      applyDefault();
+    }
+
+    it('should resume the previously running timer when the make-running box is left unchecked', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const other = app.timerManager.getAllTimers().find(timer => timer.id !== runningId);
+
+      applyToTimer(other.id, false);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(other.isRunning()).to.be.false;
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should switch to the chosen timer when the make-running box is checked', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const other = app.timerManager.getAllTimers().find(timer => timer.id !== runningId);
+
+      applyToTimer(other.id, true);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(other.isRunning()).to.be.true;
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+      expect(modals().length).to.equal(0);
+      expect(localStorage.getItem(app.hiddenRunningTimersKey)).to.be.null;
+    });
+
+    it('should start the chosen timer when nothing was running before', async () => {
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const [, other] = app.timerManager.getAllTimers();
+
+      applyToTimer(other.id, true);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(app.timerManager.getRunningTimer().id).to.equal(other.id);
     });
   });
 });

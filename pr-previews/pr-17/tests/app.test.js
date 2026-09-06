@@ -1,7 +1,17 @@
 import { expect } from '@esm-bundle/chai';
 import { App } from '../js/app.js';
 import { TimerManager } from '../js/timerManager.js';
-import { setHidden, restoreHidden, dispatchVisibilityChange, heartbeatAgo, atPreviewPath } from './helpers.js';
+import {
+  setHidden,
+  restoreHidden,
+  dispatchVisibilityChange,
+  setFocused,
+  restoreFocused,
+  dispatchWindowBlur,
+  dispatchWindowFocus,
+  heartbeatAgo,
+  atPreviewPath
+} from './helpers.js';
 
 describe('App', () => {
   let container;
@@ -88,6 +98,7 @@ describe('App', () => {
     }
     modals().forEach(el => el.remove());
     restoreHidden();
+    restoreFocused();
     container.remove();
     localStorage.clear();
   });
@@ -297,6 +308,61 @@ describe('App', () => {
       expect(localStorage.getItem('accumulated_idle_ms')).to.be.null;
       expect(app.allocationInProgress).to.be.false;
       expect(modals().length).to.equal(0);
+    });
+  });
+
+  describe('Window focus changes', () => {
+    function blurWindow() {
+      setFocused(false);
+      dispatchWindowBlur();
+    }
+
+    async function focusWindow() {
+      setFocused(true);
+      dispatchWindowFocus();
+      await tick();
+    }
+
+    it('should pause the running timer when the window loses focus and resume it when focus returns quickly', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      blurWindow();
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+
+      heartbeatAgo(5000);
+      await focusWindow();
+
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should show the allocation modal when focus returns after the idle threshold', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      blurWindow();
+      heartbeatAgo(15000);
+      await focusWindow();
+
+      expect(modals().length).to.equal(1);
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+
+      document.querySelector('.allocation-modal button.btn-cancel').click();
+      await tick();
+
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+    });
+
+    it('should pause a restored running timer when the app loads in an unfocused window', async () => {
+      const runningId = seedRunningTimer();
+      setFocused(false);
+
+      createApp();
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+
+      await focusWindow();
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
     });
   });
 
@@ -1031,11 +1097,62 @@ describe('App', () => {
 
         expect(card.classList.contains('over-target')).to.be.true;
         expect(progressBar(card).style.width).to.equal('100%');
-        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
 
         timer.addMs(TEN_SECONDS);
         app.updateAllTimerDisplays();
         expect(progressBar(card).style.width).to.equal('100%');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:10 over');
+      });
+
+      it('should count the time over the goal up once a second', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(TEN_SECONDS);
+        app.updateAllTimerDisplays();
+
+        timer.addMs(999);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
+
+        timer.addMs(1);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:01 over');
+
+        timer.addMs(59 * 1000);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:01:00 over');
+      });
+
+      it('should describe the overage to assistive tech only while over the goal', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(TEN_SECONDS - 1000);
+        app.updateAllTimerDisplays();
+        expect(progress(card).hasAttribute('aria-valuetext')).to.be.false;
+
+        timer.addMs(3000);
+        app.updateAllTimerDisplays();
+        expect(progress(card).getAttribute('aria-valuenow')).to.equal('100');
+        expect(progress(card).getAttribute('aria-valuetext')).to.equal('00:00:02 over goal');
+
+        document.getElementById('reset-all-btn').click();
+        expect(progress(card).hasAttribute('aria-valuetext')).to.be.false;
+      });
+
+      it('should not heat a goal bar however close it gets', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(9500);
+        app.updateAllTimerDisplays();
+
+        expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('');
       });
 
       it('should not touch the DOM on later frames while staying over the goal', () => {
@@ -1149,7 +1266,7 @@ describe('App', () => {
 
         const card = firstCard();
         expect(card.classList.contains('over-target')).to.be.true;
-        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:10 over');
         expect(notifier.notifications).to.have.lengthOf(0);
       });
 
@@ -1459,7 +1576,59 @@ describe('App', () => {
           expect(card.classList.contains('over-budget')).to.be.true;
           expect(card.classList.contains('over-target')).to.be.false;
           expect(progressBar(card).style.width).to.equal('100%');
-          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · exceeded');
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:00 over');
+
+          timer.addMs(42 * 1000);
+          app.updateAllTimerDisplays();
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:42 over');
+          expect(progress(card).getAttribute('aria-valuetext')).to.equal('00:00:42 over budget');
+        });
+
+        it('should heat the bar through the second half of the budget', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '100s');
+          const heat = () => progressBar(card).style.getPropertyValue('--budget-heat');
+
+          timer.addMs(40 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('0%');
+
+          timer.addMs(10 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('0%');
+
+          timer.addMs(25 * 1000);
+          app.updateAllTimerDisplays();
+          expect(progressBar(card).style.width).to.equal('75%');
+          expect(heat()).to.equal('50%');
+
+          timer.addMs(20 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('90%');
+
+          timer.addMs(5 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('100%');
+          expect(card.classList.contains('over-budget')).to.be.true;
+
+          document.getElementById('reset-all-btn').click();
+          expect(heat()).to.equal('0%');
+        });
+
+        it('should cool the bar when a budget becomes a goal', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '100s');
+          timer.addMs(90 * 1000);
+          app.updateAllTimerDisplays();
+          expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('80%');
+
+          enterTarget(card, 'goal', '100s');
+
+          expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('');
         });
 
         it('should never mark a goal card as over budget', () => {
@@ -1489,7 +1658,7 @@ describe('App', () => {
 
           expect(card.classList.contains('over-budget')).to.be.false;
           expect(card.classList.contains('over-target')).to.be.true;
-          expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+          expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
           expect(notifier.notifications).to.have.lengthOf(1);
         });
 
@@ -1538,7 +1707,7 @@ describe('App', () => {
           app.updateAllTimerDisplays();
 
           expect(card.classList.contains('over-budget')).to.be.true;
-          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · exceeded');
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:10 over');
           expect(notifier.notifications).to.have.lengthOf(0);
         });
       });
@@ -1587,6 +1756,64 @@ describe('App', () => {
         expect(localStorage.getItem('pr-12:last_heartbeat')).to.not.be.null;
         expect(localStorage.getItem('last_heartbeat')).to.be.null;
       });
+    });
+  });
+
+  describe('Allocating to a chosen timer', () => {
+    function applyToTimer(timerId, makeRunning) {
+      document.querySelector('.allocation-modal input[value="selected-timer"]').click();
+      document.querySelector('.allocation-modal select.timer-select').value = timerId;
+      const checkbox = document.querySelector('.allocation-modal input.make-running-checkbox');
+      if (checkbox.checked !== makeRunning) {
+        checkbox.click();
+      }
+      applyDefault();
+    }
+
+    it('should resume the previously running timer when the make-running box is left unchecked', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const other = app.timerManager.getAllTimers().find(timer => timer.id !== runningId);
+
+      applyToTimer(other.id, false);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(other.isRunning()).to.be.false;
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should switch to the chosen timer when the make-running box is checked', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const other = app.timerManager.getAllTimers().find(timer => timer.id !== runningId);
+
+      applyToTimer(other.id, true);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(other.isRunning()).to.be.true;
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+      expect(modals().length).to.equal(0);
+      expect(localStorage.getItem(app.hiddenRunningTimersKey)).to.be.null;
+    });
+
+    it('should start the chosen timer when nothing was running before', async () => {
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const [, other] = app.timerManager.getAllTimers();
+
+      applyToTimer(other.id, true);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(app.timerManager.getRunningTimer().id).to.equal(other.id);
     });
   });
 });

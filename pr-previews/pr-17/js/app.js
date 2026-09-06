@@ -16,19 +16,21 @@ const GOAL_ERROR_MESSAGE = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
 const TARGET_KINDS = {
   goal: {
     label: 'Goal',
-    reachedSuffix: 'reached',
     progressLabel: 'Progress toward goal',
     notificationTitle: 'Goal reached',
     notificationVerb: 'hit'
   },
   budget: {
     label: 'Budget',
-    reachedSuffix: 'exceeded',
     progressLabel: 'Budget used',
     notificationTitle: 'Budget exceeded',
     notificationVerb: 'passed'
   }
 };
+
+// A budget bar keeps the accent colour through the first half, then warms
+// toward red so the colour alone says how close the limit is
+const BUDGET_HEAT_START_PERCENT = 50;
 
 const STATE_LABELS = {
   running: 'Running',
@@ -83,8 +85,8 @@ export class App {
 
     this.idleDetector = new IdleDetector({
       idleThreshold: this.idleThreshold,
-      onHidden: () => this.handleHidden(),
-      onVisible: (idleMs) => this.handleIdleReturn(idleMs)
+      onInactive: () => this.handleInactive(),
+      onActive: (idleMs) => this.handleIdleReturn(idleMs)
     });
   }
 
@@ -96,13 +98,13 @@ export class App {
     this.bindGlobalEvents();
     this.startUpdateLoop();
 
-    if (document.hidden) {
-      // Loaded in a background tab: no visibilitychange fires for the initial state
-      this.handleHidden();
-    } else {
+    if (this.idleDetector.isActive()) {
       // Unloading fires visibilitychange -> hidden, so after a refresh the running timer
       // is paused and waiting here, possibly together with idle time to allocate
       this.handleIdleReturn(this.idleDetector.checkIdle());
+    } else {
+      // Loaded in a background tab or unfocused window: no event fires for the initial state
+      this.handleInactive();
     }
   }
 
@@ -196,18 +198,20 @@ export class App {
     const target = timer.targetMs;
     const kind = timer.targetKind;
     if (target === null) {
-      return { target, kind, percent: 0, reached: false };
+      return { target, kind, percent: 0, reached: false, over: '' };
     }
+    const reached = elapsedMs >= target;
     return {
       target,
       kind,
       percent: Math.min(100, Math.floor((elapsedMs / target) * 100)),
-      reached: elapsedMs >= target
+      reached,
+      over: reached ? formatDuration(elapsedMs - target) : ''
     };
   }
 
-  #goalKey({ target, kind, percent, reached }) {
-    return `${target}:${kind}:${percent}:${reached}`;
+  #goalKey({ target, kind, percent, reached, over }) {
+    return `${target}:${kind}:${percent}:${reached}:${over}`;
   }
 
   /**
@@ -421,17 +425,18 @@ export class App {
    * Syncs a card's target chip, progress bar and reached/exceeded visuals with its timer
    * @param {HTMLElement} card
    * @param {Timer} timer
-   * @param {{target: number|null, kind: string|null, percent: number, reached: boolean}} [progress]
+   * @param {{target: number|null, kind: string|null, percent: number, reached: boolean, over: string}} [progress]
+   *   `over` is the formatted time past the target, empty until it is reached
    */
   applyGoalState(card, timer, progress = this.#goalProgress(timer, timer.getElapsedMs())) {
-    const { target, kind, percent, reached } = progress;
+    const { target, kind, percent, reached, over } = progress;
     const hasTarget = target !== null;
     const words = hasTarget ? TARGET_KINDS[kind] : null;
 
     const goalBtn = card.querySelector('.timer-goal-btn');
     goalBtn.classList.toggle('is-set', hasTarget);
     goalBtn.textContent = hasTarget
-      ? `${words.label} ${formatDuration(target)}${reached ? ` · ${words.reachedSuffix}` : ''}`
+      ? `${words.label} ${formatDuration(target)}${reached ? ` · ${over} over` : ''}`
       : 'Set goal or budget';
     goalBtn.title = hasTarget ? `Edit ${words.label.toLowerCase()}` : 'Set a goal or budget for this timer';
 
@@ -441,7 +446,20 @@ export class App {
       progressEl.setAttribute('aria-label', words.progressLabel);
     }
     progressEl.setAttribute('aria-valuenow', String(percent));
-    card.querySelector('.timer-progress-bar').style.width = `${percent}%`;
+    if (reached) {
+      progressEl.setAttribute('aria-valuetext', `${over} over ${kind}`);
+    } else {
+      progressEl.removeAttribute('aria-valuetext');
+    }
+
+    const bar = card.querySelector('.timer-progress-bar');
+    bar.style.width = `${percent}%`;
+    if (kind === 'budget') {
+      const heat = Math.max(0, percent - BUDGET_HEAT_START_PERCENT) * (100 / (100 - BUDGET_HEAT_START_PERCENT));
+      bar.style.setProperty('--budget-heat', `${heat}%`);
+    } else {
+      bar.style.removeProperty('--budget-heat');
+    }
 
     card.classList.toggle('over-target', reached && kind === 'goal');
     card.classList.toggle('over-budget', reached && kind === 'budget');
@@ -849,9 +867,10 @@ export class App {
   }
 
   /**
-   * Pause running timers while the page is hidden and remember which to resume
+   * Pause running timers while the page is hidden or its window unfocused, and
+   * remember which to resume
    */
-  handleHidden() {
+  handleInactive() {
     const running = this.timerManager.getAllTimers().filter(timer => timer.isRunning());
     running.forEach(timer => this.timerManager.pauseTimer(timer.id));
 
@@ -864,7 +883,7 @@ export class App {
   }
 
   /**
-   * Resume the timers paused on hide and discard any pending idle time
+   * Resume the timers paused on going inactive and discard any pending idle time
    */
   handleResume() {
     this.hiddenRunningTimers.forEach(timerId => {
@@ -900,10 +919,15 @@ export class App {
     const [pausedOnHide] = this.hiddenRunningTimers;
     const runningTimer = this.timerManager.getRunningTimer();
     const previousRunningId = pausedOnHide || (runningTimer ? runningTimer.id : null);
+    let resumeId = previousRunningId;
 
     try {
       const modal = new AllocationModal(idleMs, this.timerManager.getAllTimers(), previousRunningId);
       const result = await modal.show();
+      // The user's choice of which timer runs next should hold even if allocating fails
+      if (result.config.makeRunning && result.config.timerId) {
+        resumeId = result.config.timerId;
+      }
       const allocations = this.buildAllocations(result);
       if (allocations.size > 0) {
         this.timerManager.distributeTime(allocations);
@@ -912,7 +936,7 @@ export class App {
       console.error('Failed to allocate idle time:', error);
     } finally {
       this.allocationInProgress = false;
-      this.hiddenRunningTimers = new Set(previousRunningId ? [previousRunningId] : []);
+      this.hiddenRunningTimers = new Set(resumeId ? [resumeId] : []);
       this.handleResume();
     }
   }
