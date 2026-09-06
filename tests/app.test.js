@@ -1284,4 +1284,62 @@ describe('App', () => {
       });
     });
   });
+
+  describe('Allocating to a chosen timer', () => {
+    function applyToTimer(timerId, makeRunning) {
+      document.querySelector('.allocation-modal input[value="selected-timer"]').click();
+      document.querySelector('.allocation-modal select.timer-select').value = timerId;
+      const checkbox = document.querySelector('.allocation-modal input.make-running-checkbox');
+      if (checkbox.checked !== makeRunning) {
+        checkbox.click();
+      }
+      applyDefault();
+    }
+
+    it('should resume the previously running timer when the make-running box is left unchecked', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const other = app.timerManager.getAllTimers().find(timer => timer.id !== runningId);
+
+      applyToTimer(other.id, false);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(other.isRunning()).to.be.false;
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.true;
+      expect(modals().length).to.equal(0);
+    });
+
+    it('should switch to the chosen timer when the make-running box is checked', async () => {
+      const runningId = seedRunningTimer();
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const other = app.timerManager.getAllTimers().find(timer => timer.id !== runningId);
+
+      applyToTimer(other.id, true);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(other.isRunning()).to.be.true;
+      expect(app.timerManager.getTimer(runningId).isRunning()).to.be.false;
+      expect(modals().length).to.equal(0);
+      expect(localStorage.getItem(app.hiddenRunningTimersKey)).to.be.null;
+    });
+
+    it('should start the chosen timer when nothing was running before', async () => {
+      heartbeatAgo(15000);
+      createApp();
+      await tick();
+      const [, other] = app.timerManager.getAllTimers();
+
+      applyToTimer(other.id, true);
+      await tick();
+
+      expect(other.getElapsedMs()).to.be.at.least(15000);
+      expect(app.timerManager.getRunningTimer().id).to.equal(other.id);
+    });
+  });
 });
