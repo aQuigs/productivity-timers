@@ -1,5 +1,6 @@
 import { formatDuration } from './formatDuration.js';
 import IdleDetector from './idleDetector.js';
+import { DISCARD_REMAINDER } from './timeDistributor.js';
 
 const STRATEGY_COPY = {
   'previous-timer': {
@@ -12,17 +13,22 @@ const STRATEGY_COPY = {
   },
   'fixed-distribution': {
     name: 'Split by fixed amounts',
-    description: 'Give each timer a set number of hours and minutes.'
+    description: 'Give each timer a set number of hours and minutes, then keep or discard what is left.'
   },
   'percentage-distribution': {
     name: 'Split by percentage',
-    description: 'Divide the time proportionally. Percentages must add up to 100.'
+    description: 'Divide the time proportionally. A split short of 100% discards the rest, once you confirm.'
   },
   'discard': {
     name: 'Discard it',
     description: 'Nothing is added. Timers resume where they left off.'
   }
 };
+
+// Percentages can be typed as decimals, and 100 - 33.33 is 66.67000000000002 in floating point
+function roundPercent(value) {
+  return Number(value.toFixed(2));
+}
 
 export class AllocationModal {
   constructor(idleMs, timers, previousRunningId) {
@@ -265,6 +271,13 @@ export class AllocationModal {
       remainderSelect.appendChild(option);
     });
 
+    const discardOption = document.createElement('option');
+    discardOption.value = DISCARD_REMAINDER;
+    discardOption.textContent = 'Discard the rest';
+    remainderSelect.appendChild(discardOption);
+
+    remainderSelect.addEventListener('change', () => this.#updateFixedRemaining());
+
     const remainderLabel = document.createElement('label');
     remainderLabel.textContent = 'Remainder goes to';
     remainderLabel.htmlFor = remainderSelect.id;
@@ -275,6 +288,24 @@ export class AllocationModal {
     form.appendChild(remainingContainer);
 
     return form;
+  }
+
+  // Unallocated time is only thrown away on purpose, so a short split has to be confirmed
+  #createDiscardConfirmation() {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'percentage-discard-checkbox';
+    checkbox.addEventListener('change', () => this.#updatePercentageValidation());
+
+    const text = document.createElement('span');
+    text.className = 'percentage-discard-text';
+
+    const label = document.createElement('label');
+    label.className = 'percentage-discard-label';
+    label.style.display = 'none';
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    return label;
   }
 
   #createPercentageDistributionForm() {
@@ -311,6 +342,8 @@ export class AllocationModal {
 
       form.appendChild(row);
     });
+
+    form.appendChild(this.#createDiscardConfirmation());
 
     const totalContainer = document.createElement('div');
     totalContainer.className = 'percentage-validation';
@@ -352,24 +385,63 @@ export class AllocationModal {
     }
   }
 
+  #fixedRemainderTimerId() {
+    const remainderSelect = this.modalElement.querySelector('.fixed-distribution-form .remainder-timer-select');
+    return remainderSelect ? remainderSelect.value : undefined;
+  }
+
   #updateFixedRemaining() {
     if (!this.modalElement) return;
 
     const remainingMs = Math.max(0, this.idleMs - this.#sumFixedInputs());
     const remainingDisplay = this.modalElement.querySelector('.fixed-distribution-form .remaining-time');
     if (remainingDisplay) {
-      remainingDisplay.textContent = `Remaining: ${formatDuration(remainingMs)}`;
+      const discarded = this.#fixedRemainderTimerId() === DISCARD_REMAINDER ? ' · discarded' : '';
+      remainingDisplay.textContent = `Remaining: ${formatDuration(remainingMs)}${discarded}`;
     }
+  }
+
+  #percentageLeftover(total) {
+    return total > 0 && total < 100 ? roundPercent(100 - total) : 0;
+  }
+
+  #isDiscardConfirmed() {
+    const checkbox = this.modalElement.querySelector('.percentage-distribution-form .percentage-discard-checkbox');
+    return Boolean(checkbox && checkbox.checked);
+  }
+
+  // A split may leave time unallocated, but only once the user has confirmed losing it;
+  // it may never promise more time than there is
+  #isPercentageApplicable(total) {
+    if (total <= 0 || total > 100) {
+      return false;
+    }
+    return this.#percentageLeftover(total) === 0 || this.#isDiscardConfirmed();
   }
 
   #updatePercentageValidation() {
     const form = this.modalElement.querySelector('.percentage-distribution-form');
     const total = this.#sumPercentageInputs();
+    const leftover = this.#percentageLeftover(total);
+
+    const confirmLabel = form.querySelector('.percentage-discard-label');
+    if (leftover > 0) {
+      form.querySelector('.percentage-discard-text').textContent = `Discard the remaining ${leftover}%`;
+      confirmLabel.style.display = 'flex';
+    } else {
+      // A tick left from an earlier split must not silently carry into the next one
+      form.querySelector('.percentage-discard-checkbox').checked = false;
+      confirmLabel.style.display = 'none';
+    }
+
+    const applicable = this.#isPercentageApplicable(total);
 
     const totalDisplay = form.querySelector('.percentage-total');
     if (totalDisplay) {
-      totalDisplay.textContent = `Total: ${total}%`;
-      totalDisplay.className = total === 100 ? 'percentage-total valid' : 'percentage-total invalid';
+      const fate = this.#isDiscardConfirmed() ? 'discarded' : 'unallocated';
+      const leftoverText = leftover > 0 ? ` · ${leftover}% ${fate}` : '';
+      totalDisplay.textContent = `Total: ${roundPercent(total)}%${leftoverText}`;
+      totalDisplay.className = applicable ? 'percentage-total valid' : 'percentage-total invalid';
     }
 
     const meterFill = form.querySelector('.percentage-meter-fill');
@@ -377,11 +449,11 @@ export class AllocationModal {
       meterFill.style.setProperty('--pct', `${Math.min(100, total)}%`);
     }
 
-    if (total === 100) {
+    if (applicable) {
       this.#showError('.percentage-distribution-form', null);
     }
 
-    this.modalElement.querySelector('.btn-apply').disabled = total !== 100;
+    this.modalElement.querySelector('.btn-apply').disabled = !applicable;
   }
 
   #getSelectedStrategy() {
@@ -396,10 +468,13 @@ export class AllocationModal {
       config.makeRunning = this.modalElement.querySelector('.make-running-checkbox').checked;
     } else if (strategy === 'fixed-distribution') {
       config.allocations = new Map(this.#readFixedRows().filter(([, ms]) => ms > 0));
-      const remainderSelect = this.modalElement.querySelector('.fixed-distribution-form .remainder-timer-select');
-      config.remainderTimerId = remainderSelect.value;
+      config.remainderTimerId = this.#fixedRemainderTimerId();
     } else if (strategy === 'percentage-distribution') {
       config.percentages = new Map(this.#readPercentageRows().filter(([, percentage]) => percentage > 0));
+      // Short of 100% the rest is deliberately thrown away; at 100% rounding dust still lands on a timer
+      if (this.#sumPercentageInputs() < 100) {
+        config.remainderTimerId = DISCARD_REMAINDER;
+      }
     }
 
     // idleMs may have grown since the modal opened (see #startDynamicUpdate)
@@ -421,11 +496,23 @@ export class AllocationModal {
     return true;
   }
 
+  #percentageProblem(total) {
+    if (total > 100) {
+      return `Percentages cannot add up to more than 100% (currently ${roundPercent(total)}%)`;
+    }
+    if (total <= 0) {
+      return 'Give at least one timer a percentage, or choose “Discard it”';
+    }
+
+    const leftover = this.#percentageLeftover(total);
+    return `${leftover}% is still unallocated — tick “Discard the remaining ${leftover}%” or split the whole 100%`;
+  }
+
   #validatePercentageAllocation() {
     const total = this.#sumPercentageInputs();
 
-    if (total !== 100) {
-      this.#showError('.percentage-distribution-form', `Percentages must total 100% (currently ${total}%)`);
+    if (!this.#isPercentageApplicable(total)) {
+      this.#showError('.percentage-distribution-form', this.#percentageProblem(total));
       return false;
     }
 

@@ -4,15 +4,26 @@
  */
 
 /**
+ * Stands in for a timer id when the user has chosen to throw the leftover time away.
+ * A sentinel rather than a missing id, which already means "give the dust to the largest share"
+ * @type {string}
+ */
+export const DISCARD_REMAINDER = '__discard__';
+
+/**
  * Adds leftover time to the remainder timer, or to the largest existing share when
  * no remainder timer is given, so rounding dust is never silently dropped
  * @param {Map<string, number>} result - Allocations built so far (mutated)
  * @param {Map<string, number>} shares - Caller-requested shares, used to pick the largest
  * @param {number} remainder - Milliseconds left to allocate
- * @param {string} [remainderTimerId] - Preferred recipient
+ * @param {string} [remainderTimerId] - Preferred recipient, or DISCARD_REMAINDER to drop the leftover
  * @throws {RangeError} If time remains and there is no timer to receive it
  */
 function assignRemainder(result, shares, remainder, remainderTimerId) {
+  if (remainderTimerId === DISCARD_REMAINDER) {
+    return;
+  }
+
   const target = remainderTimerId || (remainder > 0 ? largestShare(shares) : null);
 
   if (remainder > 0 && !target) {
@@ -52,7 +63,7 @@ export function allocateToSingle(totalMs, timerId) {
  * Allocates fixed amounts to specified timers, remainder goes to remainderTimerId
  * @param {number} totalMs - Total milliseconds to allocate
  * @param {Map<string, number>} fixedMap - Map of timerId to fixed milliseconds
- * @param {string} [remainderTimerId] - Timer to receive remaining time
+ * @param {string} [remainderTimerId] - Timer to receive remaining time, or DISCARD_REMAINDER to drop it
  * @returns {Map<string, number>}
  * @throws {RangeError} If fixed allocations exceed total
  */
@@ -79,7 +90,7 @@ export function allocateFixed(totalMs, fixedMap, remainderTimerId) {
  * Uses BigInt for precise rounding to ensure no milliseconds are lost
  * @param {number} totalMs - Total milliseconds to allocate
  * @param {Map<string, number>} percentages - Map of timerId to percentage (0-100)
- * @param {string} [remainderTimerId] - Timer to receive remaining time
+ * @param {string} [remainderTimerId] - Timer to receive remaining time, or DISCARD_REMAINDER to drop it
  * @returns {Map<string, number>}
  * @throws {RangeError} If percentages exceed 100%
  */

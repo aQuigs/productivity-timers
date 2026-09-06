@@ -985,7 +985,8 @@ button {
     border-color: var(--text-3);
 }
 
-.make-running-label {
+.make-running-label,
+.percentage-discard-label {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -997,11 +998,13 @@ button {
     user-select: none;
 }
 
-.make-running-label:has(input:checked) {
+.make-running-label:has(input:checked),
+.percentage-discard-label:has(input:checked) {
     color: var(--text);
 }
 
-.make-running-label input[type="checkbox"] {
+.make-running-label input[type="checkbox"],
+.percentage-discard-label input[type="checkbox"] {
     -webkit-appearance: none;
     appearance: none;
     width: 16px;
@@ -1015,11 +1018,13 @@ button {
     transition: border-color 0.15s var(--ease), background-color 0.15s var(--ease);
 }
 
-.make-running-label:hover input[type="checkbox"] {
+.make-running-label:hover input[type="checkbox"],
+.percentage-discard-label:hover input[type="checkbox"] {
     border-color: var(--text-3);
 }
 
-.make-running-label input[type="checkbox"]:checked {
+.make-running-label input[type="checkbox"]:checked,
+.percentage-discard-label input[type="checkbox"]:checked {
     border-color: var(--accent-text);
     background: var(--accent-text) var(--icon-check) center / 12px no-repeat;
 }
