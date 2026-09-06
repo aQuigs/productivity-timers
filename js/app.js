@@ -242,6 +242,13 @@ export class App {
 
     card.addEventListener('dragstart', (e) => this.handleDragStart(e, card));
     card.addEventListener('dragend', (e) => this.handleDragEnd(e, card));
+    // The display's bump ends first and bubbles up here; only the card's own ring
+    // animation ending should take the class off
+    card.addEventListener('animationend', (e) => {
+      if (e.target === card) {
+        card.classList.remove('time-added');
+      }
+    });
 
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
@@ -931,6 +938,11 @@ export class App {
       const allocations = this.buildAllocations(result);
       if (allocations.size > 0) {
         this.timerManager.distributeTime(allocations);
+        allocations.forEach((ms, timerId) => {
+          if (ms > 0) {
+            this.#animateTimeAdded(timerId);
+          }
+        });
       }
     } catch (error) {
       console.error('Failed to allocate idle time:', error);
@@ -939,6 +951,22 @@ export class App {
       this.hiddenRunningTimers = new Set(resumeId ? [resumeId] : []);
       this.handleResume();
     }
+  }
+
+  /**
+   * Replay the "time added" animation on a timer's card
+   * @param {string} timerId - Timer that just received idle time
+   */
+  #animateTimeAdded(timerId) {
+    const card = this.timerElements.get(timerId);
+    if (!card) return;
+
+    // Re-adding the class only restarts the animation after a reflow; the class
+    // may still be there from a run that is playing, or that never fired
+    // animationend because the user prefers reduced motion
+    card.classList.remove('time-added');
+    void card.offsetWidth;
+    card.classList.add('time-added');
   }
 
   /**

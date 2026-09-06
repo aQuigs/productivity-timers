@@ -267,6 +267,49 @@ describe('App', () => {
       expect(app.timerManager.getTimer(runningId).getElapsedMs()).to.be.at.least(30000);
     });
 
+    it('should animate the card that received idle time and leave the others alone', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const cards = [...document.querySelectorAll('.timer-card')];
+      expect(cards.length).to.equal(2);
+      cards.forEach(card => {
+        expect(card.classList.contains('time-added')).to.equal(card.dataset.timerId === runningId);
+      });
+    });
+
+    it('should end the time-added animation only when the card\'s own animation ends', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const card = document.querySelector(`.timer-card[data-timer-id="${runningId}"]`);
+      card.querySelector('.timer-display').dispatchEvent(new AnimationEvent('animationend', { bubbles: true }));
+      expect(card.classList.contains('time-added')).to.be.true;
+
+      card.dispatchEvent(new AnimationEvent('animationend', { bubbles: true }));
+      expect(card.classList.contains('time-added')).to.be.false;
+    });
+
+    it('should not animate any card when the idle time is discarded', async () => {
+      seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      document.querySelector('.allocation-modal input[value="discard"]').click();
+      applyDefault();
+      await tick();
+
+      expect(document.querySelectorAll('.timer-card.time-added').length).to.equal(0);
+    });
+
     it('should still offer the previous timer after a reload while the modal was open', async () => {
       const runningId = seedRunningTimer();
       createApp();

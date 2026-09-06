@@ -509,6 +509,34 @@ button {
     color: var(--accent-text);
 }
 
+/* Idle time landing on a card: a ring pulses out from its edge while the
+   display bumps, then both settle back into the card's normal state */
+.timer-card.time-added::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: time-added-ring 0.8s var(--ease);
+}
+
+.timer-card.time-added .timer-display {
+    transform-origin: left center;
+    animation: time-added-bump 0.5s var(--ease);
+}
+
+@keyframes time-added-ring {
+    from { box-shadow: 0 0 0 0 var(--accent-line); }
+    to { box-shadow: 0 0 0 14px transparent; }
+}
+
+@keyframes time-added-bump {
+    35% {
+        transform: scale(1.05);
+        color: var(--accent-text);
+    }
+}
+
 /* Goal chip and progress */
 .timer-goal {
     display: flex;
