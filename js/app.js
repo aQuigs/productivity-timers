@@ -9,7 +9,28 @@ import { namespacedKey } from './storageNamespace.js';
 
 const HIDDEN_RUNNING_TIMERS_KEY = 'app_hidden_running_timers';
 const GOAL_PLACEHOLDER = '25m, 2h, 1:30';
-const GOAL_ERROR_MESSAGE = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+const GOAL_ERROR_MESSAGE = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
+
+// A goal is a minimum to reach, a budget a maximum not to exceed; the same
+// progress machinery drives both, only the words and colours differ
+const TARGET_KINDS = {
+  goal: {
+    label: 'Goal',
+    progressLabel: 'Progress toward goal',
+    notificationTitle: 'Goal reached',
+    notificationVerb: 'hit'
+  },
+  budget: {
+    label: 'Budget',
+    progressLabel: 'Budget used',
+    notificationTitle: 'Budget exceeded',
+    notificationVerb: 'passed'
+  }
+};
+
+// A budget bar keeps the accent colour through the first half, then warms
+// toward red so the colour alone says how close the limit is
+const BUDGET_HEAT_START_PERCENT = 50;
 
 const STATE_LABELS = {
   running: 'Running',
@@ -50,6 +71,13 @@ export class App {
     this.lastDisplayedTotal = null;
     this.rafId = null;
     this.draggingCard = null;
+    // The goal editor whose controls the pointer last went down on, if any; a tap
+    // there blurs the input without a relatedTarget, and this tells that apart
+    // from a tap elsewhere
+    this.pointerDownEditor = null;
+    this.handlePointerDown = (e) => {
+      this.pointerDownEditor = e.target instanceof Element ? e.target.closest('.timer-goal-editor') : null;
+    };
     this.allocationInProgress = false;
     this.idleThreshold = DEFAULT_IDLE_THRESHOLD_MS;
     this.hiddenRunningTimersKey = namespacedKey(HIDDEN_RUNNING_TIMERS_KEY);
@@ -88,6 +116,7 @@ export class App {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    document.removeEventListener('pointerdown', this.handlePointerDown, true);
     this.idleDetector.destroy();
   }
 
@@ -160,24 +189,29 @@ export class App {
 
     this.goalReachedTimers.add(timer.id);
     if (notify) {
-      this.notifier.notify('Goal reached', `${timer.title} hit ${formatDuration(timer.targetMs)}`);
+      const { notificationTitle, notificationVerb } = TARGET_KINDS[timer.targetKind];
+      this.notifier.notify(notificationTitle, `${timer.title} ${notificationVerb} ${formatDuration(timer.targetMs)}`);
     }
   }
 
   #goalProgress(timer, elapsedMs) {
     const target = timer.targetMs;
+    const kind = timer.targetKind;
     if (target === null) {
-      return { target, percent: 0, reached: false };
+      return { target, kind, percent: 0, reached: false, over: '' };
     }
+    const reached = elapsedMs >= target;
     return {
       target,
+      kind,
       percent: Math.min(100, Math.floor((elapsedMs / target) * 100)),
-      reached: elapsedMs >= target
+      reached,
+      over: reached ? formatDuration(elapsedMs - target) : ''
     };
   }
 
-  #goalKey({ target, percent, reached }) {
-    return `${target}:${percent}:${reached}`;
+  #goalKey({ target, kind, percent, reached, over }) {
+    return `${target}:${kind}:${percent}:${reached}:${over}`;
   }
 
   /**
@@ -248,14 +282,50 @@ export class App {
     goalBtn.className = 'timer-goal-btn';
     goalBtn.addEventListener('click', () => this.openGoalEditor(card, timer));
 
+    const editor = document.createElement('div');
+    editor.className = 'timer-goal-editor';
+    editor.hidden = true;
+
     const goalInput = document.createElement('input');
     goalInput.type = 'text';
     goalInput.className = 'timer-goal-input';
     goalInput.placeholder = GOAL_PLACEHOLDER;
     goalInput.spellcheck = false;
-    goalInput.hidden = true;
-    goalInput.setAttribute('aria-label', 'Goal duration');
-    goalInput.addEventListener('keydown', (e) => {
+    goalInput.setAttribute('aria-label', 'Goal or budget duration');
+    goalInput.addEventListener('input', () => this.#clearGoalError(card));
+
+    const kindGroup = document.createElement('div');
+    kindGroup.className = 'timer-goal-kind';
+    kindGroup.setAttribute('role', 'radiogroup');
+    kindGroup.setAttribute('aria-label', 'Goal or budget');
+    // A mouse click on an option would otherwise blur the input and apply the
+    // edit before the new kind is read
+    kindGroup.addEventListener('mousedown', (e) => e.preventDefault());
+    // A tap on a touch screen still moves focus off the input, closing the
+    // on-screen keyboard mid-edit. Arrow keys change the kind without a click,
+    // so keyboard users keep their place on the radio
+    kindGroup.addEventListener('click', () => goalInput.focus());
+    Object.entries(TARGET_KINDS).forEach(([kind, { label }]) => {
+      const option = document.createElement('label');
+      option.className = 'timer-goal-kind-option';
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = `goal-kind-${timer.id}`;
+      radio.value = kind;
+      radio.checked = kind === (timer.targetKind ?? 'goal');
+
+      const text = document.createElement('span');
+      text.textContent = label;
+
+      option.appendChild(radio);
+      option.appendChild(text);
+      kindGroup.appendChild(option);
+    });
+
+    editor.appendChild(kindGroup);
+    editor.appendChild(goalInput);
+    editor.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         // Unreadable text keeps the editor open, so focus must stay where the fix is typed
@@ -267,11 +337,18 @@ export class App {
         goalBtn.focus();
       }
     });
-    goalInput.addEventListener('input', () => this.#clearGoalError(card));
-    goalInput.addEventListener('blur', () => {
-      // Enter and Escape hide the input before focus moves, so this only commits
-      // when the user clicked or tabbed away
-      if (!goalInput.hidden) {
+    editor.addEventListener('focusout', (e) => {
+      // Enter and Escape hide the editor before focus moves
+      if (editor.hidden) {
+        return;
+      }
+      // Moving between the editor's own controls is not leaving it. A tap on the
+      // kind toggle on a touch screen blurs the input with no relatedTarget
+      // before the radio changes, so there the pointer's position stands in
+      const stillInside = e.relatedTarget
+        ? editor.contains(e.relatedTarget)
+        : this.pointerDownEditor === editor;
+      if (!stillInside) {
         this.commitGoalEdit(card, timer);
       }
     });
@@ -294,7 +371,7 @@ export class App {
     progress.appendChild(progressBar);
 
     goal.appendChild(goalBtn);
-    goal.appendChild(goalInput);
+    goal.appendChild(editor);
     goal.appendChild(goalError);
     goal.appendChild(progress);
 
@@ -345,54 +422,76 @@ export class App {
   }
 
   /**
-   * Syncs a card's goal chip, progress bar and reached visuals with its timer
+   * Syncs a card's target chip, progress bar and reached/exceeded visuals with its timer
    * @param {HTMLElement} card
    * @param {Timer} timer
-   * @param {{target: number|null, percent: number, reached: boolean}} [progress]
+   * @param {{target: number|null, kind: string|null, percent: number, reached: boolean, over: string}} [progress]
+   *   `over` is the formatted time past the target, empty until it is reached
    */
   applyGoalState(card, timer, progress = this.#goalProgress(timer, timer.getElapsedMs())) {
-    const { target, percent, reached } = progress;
-    const hasGoal = target !== null;
+    const { target, kind, percent, reached, over } = progress;
+    const hasTarget = target !== null;
+    const words = hasTarget ? TARGET_KINDS[kind] : null;
 
     const goalBtn = card.querySelector('.timer-goal-btn');
-    goalBtn.classList.toggle('is-set', hasGoal);
-    goalBtn.textContent = hasGoal
-      ? `Goal ${formatDuration(target)}${reached ? ' · reached' : ''}`
-      : 'Set goal';
-    goalBtn.title = hasGoal ? 'Edit goal' : 'Set a goal for this timer';
+    goalBtn.classList.toggle('is-set', hasTarget);
+    goalBtn.textContent = hasTarget
+      ? `${words.label} ${formatDuration(target)}${reached ? ` · ${over} over` : ''}`
+      : 'Set goal or budget';
+    goalBtn.title = hasTarget ? `Edit ${words.label.toLowerCase()}` : 'Set a goal or budget for this timer';
 
     const progressEl = card.querySelector('.timer-progress');
-    progressEl.hidden = !hasGoal;
+    progressEl.hidden = !hasTarget;
+    if (hasTarget) {
+      progressEl.setAttribute('aria-label', words.progressLabel);
+    }
     progressEl.setAttribute('aria-valuenow', String(percent));
-    card.querySelector('.timer-progress-bar').style.width = `${percent}%`;
+    if (reached) {
+      progressEl.setAttribute('aria-valuetext', `${over} over ${kind}`);
+    } else {
+      progressEl.removeAttribute('aria-valuetext');
+    }
 
-    card.classList.toggle('over-target', reached);
+    const bar = card.querySelector('.timer-progress-bar');
+    bar.style.width = `${percent}%`;
+    if (kind === 'budget') {
+      const heat = Math.max(0, percent - BUDGET_HEAT_START_PERCENT) * (100 / (100 - BUDGET_HEAT_START_PERCENT));
+      bar.style.setProperty('--budget-heat', `${heat}%`);
+    } else {
+      bar.style.removeProperty('--budget-heat');
+    }
+
+    card.classList.toggle('over-target', reached && kind === 'goal');
+    card.classList.toggle('over-budget', reached && kind === 'budget');
     this.lastDisplayedGoals.set(timer.id, this.#goalKey(progress));
   }
 
   /**
-   * Swap the goal chip for an input prefilled with the current goal
+   * Swap the chip for the editor, preselecting the current kind and prefilling the time
    * @param {HTMLElement} card
    * @param {Timer} timer
    */
   openGoalEditor(card, timer) {
     const goalBtn = card.querySelector('.timer-goal-btn');
+    const editor = card.querySelector('.timer-goal-editor');
     const goalInput = card.querySelector('.timer-goal-input');
 
+    const kind = timer.targetKind ?? 'goal';
+    card.querySelector(`.timer-goal-kind input[value="${kind}"]`).checked = true;
     goalInput.value = timer.targetMs === null ? '' : formatDuration(timer.targetMs);
     goalBtn.hidden = true;
-    goalInput.hidden = false;
+    editor.hidden = false;
     goalInput.focus();
     goalInput.select();
   }
 
   /**
-   * Hide the goal input and show the chip again without applying anything
+   * Hide the editor and show the chip again without applying anything
    * @param {HTMLElement} card
    */
   closeGoalEditor(card) {
     this.#clearGoalError(card);
-    card.querySelector('.timer-goal-input').hidden = true;
+    card.querySelector('.timer-goal-editor').hidden = true;
     card.querySelector('.timer-goal-btn').hidden = false;
   }
 
@@ -428,7 +527,8 @@ export class App {
    * @returns {boolean} true if the editor was closed
    */
   commitGoalEdit(card, timer) {
-    const applied = this.handleGoalChange(timer, card.querySelector('.timer-goal-input').value);
+    const kind = card.querySelector('.timer-goal-kind input:checked').value;
+    const applied = this.handleGoalChange(timer, card.querySelector('.timer-goal-input').value, kind);
     if (!applied) {
       this.#showGoalError(card);
       return false;
@@ -440,12 +540,13 @@ export class App {
   }
 
   /**
-   * Handle goal text entered by the user: empty clears the goal
+   * Handle target text entered by the user: empty clears the target
    * @param {Timer} timer
    * @param {string} text
-   * @returns {boolean} false when the text could not be read, leaving the goal unchanged
+   * @param {'goal'|'budget'} [kind='goal']
+   * @returns {boolean} false when the text could not be read, leaving the target unchanged
    */
-  handleGoalChange(timer, text) {
+  handleGoalChange(timer, text, kind = 'goal') {
     const trimmed = text.trim();
 
     if (trimmed.length === 0) {
@@ -455,12 +556,12 @@ export class App {
       if (targetMs === null) {
         return false;
       }
-      this.timerManager.setTimerTarget(timer.id, targetMs);
+      this.timerManager.setTimerTarget(timer.id, targetMs, kind);
       // Asking here, on the user's own action, is what browsers expect
       this.notifier.requestPermission();
     }
 
-    // A goal set below the elapsed time was never crossed, so adopt it silently
+    // A target set below the elapsed time was never crossed, so adopt it silently
     this.#syncGoalReached(timer, timer.hasReachedTarget(), false);
     return true;
   }
@@ -487,6 +588,7 @@ export class App {
     this.addTimerBtn.addEventListener('click', () => this.handleAddTimer());
     this.timerContainer.addEventListener('dragover', (e) => this.handleDragOver(e));
     this.timerContainer.addEventListener('drop', (e) => this.handleDrop(e));
+    document.addEventListener('pointerdown', this.handlePointerDown, true);
   }
 
   /**

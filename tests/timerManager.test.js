@@ -313,6 +313,50 @@ describe('TimerManager', () => {
       expect(() => manager.setTimerTarget(timerId, -5)).to.throw(RangeError);
       expect(manager.getTimer(timerId).targetMs).to.be.null;
     });
+
+    it('should set a budget kind and persist it', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timerId = manager.getAllTimers()[0].id;
+
+      const result = manager.setTimerTarget(timerId, 1500000, 'budget');
+
+      expect(result).to.be.true;
+      expect(manager.getTimer(timerId).targetKind).to.equal('budget');
+      expect(storage.load().timers[0].targetKind).to.equal('budget');
+    });
+
+    it('should default the kind to goal and persist it', () => {
+      const storage = new StorageService();
+      const manager = new TimerManager(2, storage);
+      const timerId = manager.getAllTimers()[0].id;
+
+      manager.setTimerTarget(timerId, 1500000);
+
+      expect(manager.getTimer(timerId).targetKind).to.equal('goal');
+      expect(storage.load().timers[0].targetKind).to.equal('goal');
+    });
+
+    it('should restore the kind from storage on construction', () => {
+      const storage = new StorageService();
+      const first = new TimerManager(2, storage);
+      const timerId = first.getAllTimers()[0].id;
+      first.setTimerTarget(timerId, 7200000, 'budget');
+
+      const second = new TimerManager(2, storage);
+
+      expect(second.getTimer(timerId).targetKind).to.equal('budget');
+      expect(second.getTimer(timerId).targetMs).to.equal(7200000);
+    });
+
+    it('should throw for an unknown kind and leave the timer unchanged', () => {
+      const manager = new TimerManager(2, new StorageService());
+      const timerId = manager.getAllTimers()[0].id;
+
+      expect(() => manager.setTimerTarget(timerId, 1500000, 'limit')).to.throw(RangeError);
+      expect(manager.getTimer(timerId).targetMs).to.be.null;
+      expect(manager.getTimer(timerId).targetKind).to.be.null;
+    });
   });
 
   describe('Persistence - resetTimer()', () => {

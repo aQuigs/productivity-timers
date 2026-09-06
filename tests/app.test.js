@@ -744,6 +744,19 @@ describe('App', () => {
       return card.querySelector('.timer-goal-input');
     }
 
+    function goalEditor(card) {
+      return card.querySelector('.timer-goal-editor');
+    }
+
+    function kindRadio(card, kind) {
+      return card.querySelector(`.timer-goal-kind input[value="${kind}"]`);
+    }
+
+    // Focus leaving the goal input, as when the user clicks or tabs away
+    function focusOut(card, relatedTarget = null) {
+      goalInput(card).dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget }));
+    }
+
     function progress(card) {
       return card.querySelector('.timer-progress');
     }
@@ -777,9 +790,9 @@ describe('App', () => {
         createApp({ notifier });
         const card = firstCard();
 
-        expect(goalButton(card).textContent).to.equal('Set goal');
+        expect(goalButton(card).textContent).to.equal('Set goal or budget');
         expect(goalButton(card).classList.contains('is-set')).to.be.false;
-        expect(goalInput(card).hidden).to.be.true;
+        expect(goalEditor(card).hidden).to.be.true;
         expect(progress(card).hidden).to.be.true;
         expect(card.classList.contains('over-target')).to.be.false;
       });
@@ -790,7 +803,7 @@ describe('App', () => {
 
         goalButton(card).click();
 
-        expect(goalInput(card).hidden).to.be.false;
+        expect(goalEditor(card).hidden).to.be.false;
         expect(goalButton(card).hidden).to.be.true;
         expect(goalInput(card).placeholder).to.equal('25m, 2h, 1:30');
       });
@@ -806,7 +819,7 @@ describe('App', () => {
         expect(goalButton(card).textContent).to.equal('Goal 00:25:00');
         expect(goalButton(card).classList.contains('is-set')).to.be.true;
         expect(goalButton(card).hidden).to.be.false;
-        expect(goalInput(card).hidden).to.be.true;
+        expect(goalEditor(card).hidden).to.be.true;
         expect(progress(card).hidden).to.be.false;
         expect(new TimerManager().getTimer(timer.id).targetMs).to.equal(25 * 60 * 1000);
       });
@@ -818,10 +831,10 @@ describe('App', () => {
 
         goalButton(card).click();
         goalInput(card).value = '2h';
-        goalInput(card).dispatchEvent(new Event('blur'));
+        focusOut(card);
 
         expect(timer.targetMs).to.equal(2 * 60 * 60 * 1000);
-        expect(goalInput(card).hidden).to.be.true;
+        expect(goalEditor(card).hidden).to.be.true;
       });
 
       it('should prefill the input with the current goal when editing again', () => {
@@ -845,7 +858,7 @@ describe('App', () => {
         keydown(goalInput(card), 'Escape');
 
         expect(timer.targetMs).to.equal(25 * 60 * 1000);
-        expect(goalInput(card).hidden).to.be.true;
+        expect(goalEditor(card).hidden).to.be.true;
         expect(goalButton(card).hidden).to.be.false;
         expect(goalButton(card).textContent).to.equal('Goal 00:25:00');
       });
@@ -858,7 +871,7 @@ describe('App', () => {
         goalButton(card).click();
         goalInput(card).value = '5m';
         keydown(goalInput(card), 'Escape');
-        goalInput(card).dispatchEvent(new Event('blur'));
+        focusOut(card);
 
         expect(timer.targetMs).to.be.null;
       });
@@ -872,7 +885,7 @@ describe('App', () => {
         enterGoal(card, '   ');
 
         expect(timer.targetMs).to.be.null;
-        expect(goalButton(card).textContent).to.equal('Set goal');
+        expect(goalButton(card).textContent).to.equal('Set goal or budget');
         expect(goalButton(card).classList.contains('is-set')).to.be.false;
         expect(progress(card).hidden).to.be.true;
         expect(new TimerManager().getTimer(timer.id).targetMs).to.be.null;
@@ -892,7 +905,7 @@ describe('App', () => {
     });
 
     describe('unreadable input', () => {
-      const ERROR_MESSAGE = "Couldn't read that goal. Try 25m, 1h 30m or 1:30";
+      const ERROR_MESSAGE = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
 
       function goalError(card) {
         return card.querySelector('.timer-goal-error');
@@ -901,7 +914,7 @@ describe('App', () => {
       function expectInvalid(card) {
         const input = goalInput(card);
         const error = goalError(card);
-        expect(input.hidden).to.be.false;
+        expect(goalEditor(card).hidden).to.be.false;
         expect(input.classList.contains('is-invalid')).to.be.true;
         expect(input.getAttribute('aria-invalid')).to.equal('true');
         expect(error.hidden).to.be.false;
@@ -962,7 +975,7 @@ describe('App', () => {
 
         goalButton(card).click();
         goalInput(card).value = 'soon';
-        goalInput(card).dispatchEvent(new Event('blur'));
+        focusOut(card);
 
         expectInvalid(card);
         expect(goalInput(card).value).to.equal('soon');
@@ -979,7 +992,7 @@ describe('App', () => {
         goalInput(card).dispatchEvent(new Event('input'));
 
         expectValid(card);
-        expect(goalInput(card).hidden).to.be.false;
+        expect(goalEditor(card).hidden).to.be.false;
       });
 
       it('should close the editor and clear the error on Escape', () => {
@@ -991,7 +1004,7 @@ describe('App', () => {
         keydown(goalInput(card), 'Escape');
 
         expectValid(card);
-        expect(goalInput(card).hidden).to.be.true;
+        expect(goalEditor(card).hidden).to.be.true;
         expect(goalButton(card).hidden).to.be.false;
         expect(timer.targetMs).to.be.null;
       });
@@ -1006,7 +1019,7 @@ describe('App', () => {
         keydown(goalInput(card), 'Enter');
 
         expectValid(card);
-        expect(goalInput(card).hidden).to.be.true;
+        expect(goalEditor(card).hidden).to.be.true;
         expect(timer.targetMs).to.equal(25 * 60 * 1000);
         expect(goalButton(card).textContent).to.equal('Goal 00:25:00');
         expect(notifier.requests).to.equal(1);
@@ -1084,11 +1097,62 @@ describe('App', () => {
 
         expect(card.classList.contains('over-target')).to.be.true;
         expect(progressBar(card).style.width).to.equal('100%');
-        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
 
         timer.addMs(TEN_SECONDS);
         app.updateAllTimerDisplays();
         expect(progressBar(card).style.width).to.equal('100%');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:10 over');
+      });
+
+      it('should count the time over the goal up once a second', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(TEN_SECONDS);
+        app.updateAllTimerDisplays();
+
+        timer.addMs(999);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
+
+        timer.addMs(1);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:01 over');
+
+        timer.addMs(59 * 1000);
+        app.updateAllTimerDisplays();
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:01:00 over');
+      });
+
+      it('should describe the overage to assistive tech only while over the goal', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(TEN_SECONDS - 1000);
+        app.updateAllTimerDisplays();
+        expect(progress(card).hasAttribute('aria-valuetext')).to.be.false;
+
+        timer.addMs(3000);
+        app.updateAllTimerDisplays();
+        expect(progress(card).getAttribute('aria-valuenow')).to.equal('100');
+        expect(progress(card).getAttribute('aria-valuetext')).to.equal('00:00:02 over goal');
+
+        document.getElementById('reset-all-btn').click();
+        expect(progress(card).hasAttribute('aria-valuetext')).to.be.false;
+      });
+
+      it('should not heat a goal bar however close it gets', () => {
+        createApp({ notifier });
+        const card = firstCard();
+        const timer = app.timerManager.getAllTimers()[0];
+        enterGoal(card, '10s');
+        timer.addMs(9500);
+        app.updateAllTimerDisplays();
+
+        expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('');
       });
 
       it('should not touch the DOM on later frames while staying over the goal', () => {
@@ -1202,7 +1266,7 @@ describe('App', () => {
 
         const card = firstCard();
         expect(card.classList.contains('over-target')).to.be.true;
-        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · reached');
+        expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:10 over');
         expect(notifier.notifications).to.have.lengthOf(0);
       });
 
@@ -1236,6 +1300,416 @@ describe('App', () => {
 
         expect(app.goalReachedTimers.has(timer.id)).to.be.false;
         expect(app.lastDisplayedGoals.has(timer.id)).to.be.false;
+      });
+    });
+
+    describe('budget', () => {
+      function enterTarget(card, kind, text) {
+        goalButton(card).click();
+        kindRadio(card, kind).click();
+        goalInput(card).value = text;
+        keydown(goalInput(card), 'Enter');
+      }
+
+      function enterBudget(card, text) {
+        enterTarget(card, 'budget', text);
+      }
+
+      // Comparing elements with `equal` is avoided on purpose: on failure the
+      // runner tries to serialise them and never finishes
+      function hasFocus(element) {
+        return document.activeElement === element;
+      }
+
+      function pointerDown(target) {
+        target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' }));
+      }
+
+      describe('kind toggle', () => {
+        it('should offer Goal and Budget in the editor with Goal preselected for a fresh timer', () => {
+          createApp({ notifier });
+          const card = firstCard();
+
+          goalButton(card).click();
+
+          const group = card.querySelector('.timer-goal-kind');
+          expect(group.getAttribute('role')).to.equal('radiogroup');
+          expect(group.getAttribute('aria-label')).to.be.a('string').that.is.not.empty;
+          expect(goalEditor(card).contains(group)).to.be.true;
+          expect(kindRadio(card, 'goal').checked).to.be.true;
+          expect(kindRadio(card, 'budget').checked).to.be.false;
+          expect(goalButton(card).title).to.equal('Set a goal or budget for this timer');
+        });
+
+        it('should keep the radios of different cards independent', () => {
+          createApp({ notifier });
+          const [first, second] = container.querySelectorAll('.timer-card');
+
+          goalButton(first).click();
+          kindRadio(first, 'budget').click();
+
+          expect(kindRadio(first, 'goal').name).to.not.equal(kindRadio(second, 'goal').name);
+          expect(kindRadio(second, 'goal').checked).to.be.true;
+        });
+
+        it('should apply the typed time as a budget, show it as a chip and persist the kind', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+
+          enterBudget(card, '2h');
+
+          expect(timer.targetMs).to.equal(2 * 60 * 60 * 1000);
+          expect(timer.targetKind).to.equal('budget');
+          expect(goalButton(card).textContent).to.equal('Budget 02:00:00');
+          expect(goalButton(card).title).to.equal('Edit budget');
+          expect(goalButton(card).classList.contains('is-set')).to.be.true;
+          expect(goalEditor(card).hidden).to.be.true;
+          expect(progress(card).hidden).to.be.false;
+          expect(progress(card).getAttribute('aria-label')).to.equal('Budget used');
+          expect(notifier.requests).to.equal(1);
+
+          const restored = new TimerManager().getTimer(timer.id);
+          expect(restored.targetKind).to.equal('budget');
+          expect(restored.targetMs).to.equal(2 * 60 * 60 * 1000);
+        });
+
+        it('should label a goal chip for editing and its bar as progress', () => {
+          createApp({ notifier });
+          const card = firstCard();
+
+          enterGoal(card, '25m');
+
+          expect(goalButton(card).title).to.equal('Edit goal');
+          expect(progress(card).getAttribute('aria-label')).to.equal('Progress toward goal');
+        });
+
+        it('should preselect the current kind when editing again', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          enterBudget(card, '2h');
+
+          goalButton(card).click();
+
+          expect(kindRadio(card, 'budget').checked).to.be.true;
+          expect(goalInput(card).value).to.equal('02:00:00');
+        });
+
+        it('should switch a goal to a budget of the same length and redraw the chip', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterGoal(card, '25m');
+
+          enterBudget(card, '25m');
+
+          expect(timer.targetKind).to.equal('budget');
+          expect(goalButton(card).textContent).to.equal('Budget 00:25:00');
+        });
+
+        it('should render a budget restored from storage', () => {
+          const seed = new TimerManager();
+          const timerId = seed.getAllTimers()[1].id;
+          seed.setTimerTarget(timerId, 2 * 60 * 60 * 1000, 'budget');
+
+          createApp({ notifier });
+          const card = container.querySelectorAll('.timer-card')[1];
+
+          expect(goalButton(card).textContent).to.equal('Budget 02:00:00');
+          expect(progress(card).hidden).to.be.false;
+        });
+
+        it('should clear a budget when the input is emptied', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '2h');
+
+          enterGoal(card, '');
+
+          expect(timer.targetMs).to.be.null;
+          expect(timer.targetKind).to.be.null;
+          expect(goalButton(card).textContent).to.equal('Set goal or budget');
+        });
+      });
+
+      describe('focus while switching kind', () => {
+        it('should keep focus in the input when the kind toggle is clicked with a mouse', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          goalButton(card).click();
+
+          const label = kindRadio(card, 'budget').closest('label');
+          const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+          label.dispatchEvent(mousedown);
+
+          expect(mousedown.defaultPrevented).to.be.true;
+          expect(hasFocus(goalInput(card))).to.be.true;
+        });
+
+        it('should not apply the edit when focus moves from the input to the kind toggle', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          goalButton(card).click();
+          goalInput(card).value = '2h';
+
+          focusOut(card, kindRadio(card, 'budget'));
+
+          expect(timer.targetMs).to.be.null;
+          expect(goalEditor(card).hidden).to.be.false;
+        });
+
+        it('should apply the edit when focus leaves the editor from the kind toggle', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          goalButton(card).click();
+          goalInput(card).value = '2h';
+          const budget = kindRadio(card, 'budget');
+          budget.click();
+
+          budget.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
+
+          expect(timer.targetMs).to.equal(2 * 60 * 60 * 1000);
+          expect(timer.targetKind).to.equal('budget');
+          expect(goalEditor(card).hidden).to.be.true;
+        });
+
+        it('should keep the editor open when a tap on the kind toggle blurs the input, then hand focus back', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          goalButton(card).click();
+          goalInput(card).value = '2h';
+          const budget = kindRadio(card, 'budget');
+
+          // Touch screens blur the input before the tap reaches the radio
+          pointerDown(budget.closest('label'));
+          goalInput(card).blur();
+
+          expect(timer.targetMs).to.be.null;
+          expect(goalEditor(card).hidden).to.be.false;
+          expect(goalEditor(card).contains(document.activeElement)).to.be.false;
+
+          budget.click();
+
+          expect(budget.checked).to.be.true;
+          expect(hasFocus(goalInput(card))).to.be.true;
+
+          keydown(goalInput(card), 'Enter');
+          expect(timer.targetMs).to.equal(2 * 60 * 60 * 1000);
+          expect(timer.targetKind).to.equal('budget');
+        });
+
+        it('should apply the edit when a tap elsewhere blurs the input', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          goalButton(card).click();
+          kindRadio(card, 'budget').click();
+          goalInput(card).value = '2h';
+
+          pointerDown(document.body);
+          goalInput(card).blur();
+
+          expect(timer.targetMs).to.equal(2 * 60 * 60 * 1000);
+          expect(timer.targetKind).to.equal('budget');
+          expect(goalEditor(card).hidden).to.be.true;
+        });
+
+        it('should apply the edit on a bare blur, as when the window loses focus', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          goalButton(card).click();
+          goalInput(card).value = '25m';
+
+          goalInput(card).blur();
+
+          expect(timer.targetMs).to.equal(25 * 60 * 1000);
+          expect(goalEditor(card).hidden).to.be.true;
+        });
+
+        it('should leave focus on the radio when the kind is changed from the keyboard', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          goalButton(card).click();
+          const budget = kindRadio(card, 'budget');
+          budget.focus();
+
+          budget.checked = true;
+          budget.dispatchEvent(new Event('change', { bubbles: true }));
+
+          expect(hasFocus(budget)).to.be.true;
+          expect(goalEditor(card).hidden).to.be.false;
+        });
+
+        it('should stop tracking the pointer once destroyed', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          goalButton(card).click();
+
+          app.destroy();
+          pointerDown(kindRadio(card, 'budget').closest('label'));
+
+          expect(app.pointerDownEditor).to.be.null;
+          app = null;
+        });
+      });
+
+      describe('exceeding', () => {
+        it('should mark the card over budget, not over target, once the budget is used up', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '10s');
+          timer.addMs(TEN_SECONDS - 1);
+          app.updateAllTimerDisplays();
+
+          expect(card.classList.contains('over-budget')).to.be.false;
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10');
+
+          timer.addMs(1);
+          app.updateAllTimerDisplays();
+
+          expect(card.classList.contains('over-budget')).to.be.true;
+          expect(card.classList.contains('over-target')).to.be.false;
+          expect(progressBar(card).style.width).to.equal('100%');
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:00 over');
+
+          timer.addMs(42 * 1000);
+          app.updateAllTimerDisplays();
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:42 over');
+          expect(progress(card).getAttribute('aria-valuetext')).to.equal('00:00:42 over budget');
+        });
+
+        it('should heat the bar through the second half of the budget', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '100s');
+          const heat = () => progressBar(card).style.getPropertyValue('--budget-heat');
+
+          timer.addMs(40 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('0%');
+
+          timer.addMs(10 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('0%');
+
+          timer.addMs(25 * 1000);
+          app.updateAllTimerDisplays();
+          expect(progressBar(card).style.width).to.equal('75%');
+          expect(heat()).to.equal('50%');
+
+          timer.addMs(20 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('90%');
+
+          timer.addMs(5 * 1000);
+          app.updateAllTimerDisplays();
+          expect(heat()).to.equal('100%');
+          expect(card.classList.contains('over-budget')).to.be.true;
+
+          document.getElementById('reset-all-btn').click();
+          expect(heat()).to.equal('0%');
+        });
+
+        it('should cool the bar when a budget becomes a goal', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '100s');
+          timer.addMs(90 * 1000);
+          app.updateAllTimerDisplays();
+          expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('80%');
+
+          enterTarget(card, 'goal', '100s');
+
+          expect(progressBar(card).style.getPropertyValue('--budget-heat')).to.equal('');
+        });
+
+        it('should never mark a goal card as over budget', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterGoal(card, '10s');
+
+          timer.addMs(TEN_SECONDS);
+          app.updateAllTimerDisplays();
+
+          expect(card.classList.contains('over-target')).to.be.true;
+          expect(card.classList.contains('over-budget')).to.be.false;
+        });
+
+        it('should swap the over state when an exceeded budget becomes a goal, without notifying again', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '10s');
+          timer.addMs(TEN_SECONDS);
+          app.updateAllTimerDisplays();
+          expect(notifier.notifications).to.have.lengthOf(1);
+
+          enterTarget(card, 'goal', '10s');
+          app.updateAllTimerDisplays();
+
+          expect(card.classList.contains('over-budget')).to.be.false;
+          expect(card.classList.contains('over-target')).to.be.true;
+          expect(goalButton(card).textContent).to.equal('Goal 00:00:10 · 00:00:00 over');
+          expect(notifier.notifications).to.have.lengthOf(1);
+        });
+
+        it('should drop the over-budget state after a reset', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '10s');
+          timer.addMs(TEN_SECONDS);
+          app.updateAllTimerDisplays();
+
+          document.getElementById('reset-all-btn').click();
+
+          expect(card.classList.contains('over-budget')).to.be.false;
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10');
+        });
+
+        it('should notify once when a timer exceeds its budget', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          enterBudget(card, '10s');
+
+          timer.addMs(TEN_SECONDS - 1000);
+          app.updateAllTimerDisplays();
+          expect(notifier.notifications).to.have.lengthOf(0);
+
+          timer.addMs(1000);
+          app.updateAllTimerDisplays();
+          expect(notifier.notifications).to.deep.equal([
+            { title: 'Budget exceeded', body: 'Timer 1 passed 00:00:10' }
+          ]);
+
+          timer.addMs(5000);
+          app.updateAllTimerDisplays();
+          expect(notifier.notifications).to.have.lengthOf(1);
+        });
+
+        it('should not notify for a budget set below the time already elapsed', () => {
+          createApp({ notifier });
+          const card = firstCard();
+          const timer = app.timerManager.getAllTimers()[0];
+          timer.addMs(2 * TEN_SECONDS);
+
+          enterBudget(card, '10s');
+          app.updateAllTimerDisplays();
+
+          expect(card.classList.contains('over-budget')).to.be.true;
+          expect(goalButton(card).textContent).to.equal('Budget 00:00:10 · 00:00:10 over');
+          expect(notifier.notifications).to.have.lengthOf(0);
+        });
       });
     });
   });

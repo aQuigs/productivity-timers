@@ -187,7 +187,8 @@ describe('Timer', () => {
           title: 'Test',
           elapsedMs: 0,
           state: 'stopped',
-          targetMs: null
+          targetMs: null,
+          targetKind: null
         });
       });
 
@@ -195,6 +196,13 @@ describe('Timer', () => {
         const timer = new Timer('Test', 'abc-123');
         timer.setTarget(1500000);
         expect(timer.toJSON().targetMs).to.equal(1500000);
+        expect(timer.toJSON().targetKind).to.equal('goal');
+      });
+
+      it('should serialize a budget target kind', () => {
+        const timer = new Timer('Test', 'abc-123');
+        timer.setTarget(1500000, 'budget');
+        expect(timer.toJSON().targetKind).to.equal('budget');
       });
 
       it('should serialize paused timer with elapsed time', (done) => {
@@ -405,6 +413,34 @@ describe('Timer', () => {
         expect(() => Timer.fromJSON({ ...base, targetMs: 0 })).to.throw(Error);
         expect(() => Timer.fromJSON({ ...base, targetMs: -1000 })).to.throw(Error);
       });
+
+      it('should restore the target kind', () => {
+        const base = { id: 'abc-123', title: 'Restored', elapsedMs: 0, state: 'stopped', targetMs: 7200000 };
+
+        expect(Timer.fromJSON({ ...base, targetKind: 'budget' }).targetKind).to.equal('budget');
+        expect(Timer.fromJSON({ ...base, targetKind: 'goal' }).targetKind).to.equal('goal');
+      });
+
+      it('should load a target saved before kinds existed as a goal', () => {
+        const base = { id: 'abc-123', title: 'Restored', elapsedMs: 0, state: 'stopped', targetMs: 7200000 };
+
+        expect(Timer.fromJSON(base).targetKind).to.equal('goal');
+        expect(Timer.fromJSON({ ...base, targetKind: null }).targetKind).to.equal('goal');
+      });
+
+      it('should ignore the kind when there is no target', () => {
+        const base = { id: 'abc-123', title: 'Restored', elapsedMs: 0, state: 'stopped' };
+
+        expect(Timer.fromJSON({ ...base, targetMs: null, targetKind: 'budget' }).targetKind).to.be.null;
+        expect(Timer.fromJSON({ ...base, targetKind: 'nonsense' }).targetKind).to.be.null;
+      });
+
+      it('should throw error for an invalid target kind', () => {
+        const base = { id: 'abc-123', title: 'Restored', elapsedMs: 0, state: 'stopped', targetMs: 7200000 };
+
+        expect(() => Timer.fromJSON({ ...base, targetKind: 'limit' })).to.throw(Error);
+        expect(() => Timer.fromJSON({ ...base, targetKind: 42 })).to.throw(Error);
+      });
     });
 
     describe('Round-trip serialization', () => {
@@ -484,11 +520,77 @@ describe('Timer', () => {
 
     it('should keep the target across a reset so the goal can be run again', () => {
       const timer = new Timer('Test');
-      timer.setTarget(1500000);
+      timer.setTarget(1500000, 'budget');
       timer.addMs(2000000);
       timer.reset();
       expect(timer.getElapsedMs()).to.equal(0);
       expect(timer.targetMs).to.equal(1500000);
+      expect(timer.targetKind).to.equal('budget');
+    });
+
+    describe('kind', () => {
+      it('should expose the two supported kinds', () => {
+        expect(Timer.TARGET_KINDS).to.deep.equal(['goal', 'budget']);
+      });
+
+      it('should have no kind without a target', () => {
+        const timer = new Timer('Test');
+        expect(timer.targetKind).to.be.null;
+      });
+
+      it('should default a new target to a goal', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(1500000);
+        expect(timer.targetKind).to.equal('goal');
+      });
+
+      it('should accept a budget kind', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(1500000, 'budget');
+        expect(timer.targetKind).to.equal('budget');
+        expect(timer.targetMs).to.equal(1500000);
+      });
+
+      it('should switch kinds when the target is set again', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(1500000, 'budget');
+        timer.setTarget(1500000, 'goal');
+        expect(timer.targetKind).to.equal('goal');
+      });
+
+      it('should drop the kind when the target is cleared', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(1500000, 'budget');
+        timer.setTarget(null);
+        expect(timer.targetKind).to.be.null;
+        timer.setTarget(null, 'budget');
+        expect(timer.targetKind).to.be.null;
+      });
+
+      it('should throw TypeError for a non-string kind', () => {
+        const timer = new Timer('Test');
+        expect(() => timer.setTarget(1500000, 42)).to.throw(TypeError);
+        expect(() => timer.setTarget(1500000, null)).to.throw(TypeError);
+        expect(timer.targetMs).to.be.null;
+        expect(timer.targetKind).to.be.null;
+      });
+
+      it('should throw RangeError for an unknown kind', () => {
+        const timer = new Timer('Test');
+        expect(() => timer.setTarget(1500000, 'limit')).to.throw(RangeError);
+        expect(() => timer.setTarget(1500000, 'Goal')).to.throw(RangeError);
+        expect(timer.targetMs).to.be.null;
+        expect(timer.targetKind).to.be.null;
+      });
+
+      it('should report a budget as reached once elapsed time meets it', () => {
+        const timer = new Timer('Test');
+        timer.setTarget(10000, 'budget');
+        timer.addMs(9999);
+        expect(timer.hasReachedTarget()).to.be.false;
+        timer.addMs(1);
+        expect(timer.hasReachedTarget()).to.be.true;
+      });
     });
 
     describe('hasReachedTarget()', () => {
