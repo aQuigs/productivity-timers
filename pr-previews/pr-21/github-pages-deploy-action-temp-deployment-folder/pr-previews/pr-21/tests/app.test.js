@@ -314,7 +314,7 @@ describe('App', () => {
       expect(displaySeconds(display)).to.be.below(15);
       expect(displaySeconds(total)).to.be.below(15);
 
-      await tick(1400);
+      await tick(1200);
       const elapsedSeconds = Math.floor(app.timerManager.getTimer(runningId).getElapsedMs() / 1000);
       expect(displaySeconds(display)).to.be.at.least(15).and.at.most(elapsedSeconds);
       expect(displaySeconds(total)).to.be.at.least(15).and.at.most(elapsedSeconds);
@@ -334,7 +334,7 @@ describe('App', () => {
       expect(notifier.notifications).to.have.lengthOf(1);
       expect(card.classList.contains('over-target')).to.be.false;
 
-      await tick(1400);
+      await tick(1200);
       expect(card.classList.contains('over-target')).to.be.true;
       expect(notifier.notifications).to.have.lengthOf(1);
     });
