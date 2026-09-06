@@ -1,5 +1,6 @@
 import { expect } from '@esm-bundle/chai';
 import { AllocationModal } from '../js/allocationModal.js';
+import { DISCARD_REMAINDER } from '../js/timeDistributor.js';
 
 describe('AllocationModal', () => {
   let modal;
@@ -562,7 +563,7 @@ describe('AllocationModal', () => {
 
       const remainderSelect = document.querySelector('.allocation-modal .fixed-distribution-form .remainder-timer-select');
       expect(remainderSelect).to.exist;
-      expect(remainderSelect.options.length).to.equal(3);
+      expect(remainderSelect.options.length, 'one option per timer plus discard').to.equal(4);
     });
 
     it('should update remaining time live as user changes allocations', (done) => {
@@ -759,7 +760,7 @@ describe('AllocationModal', () => {
       expect(totalDisplay).to.exist;
     });
 
-    it('should disable Apply button if percentages do not sum to 100%', (done) => {
+    it('should disable Apply button if percentages add up to more than 100%', (done) => {
       const timers = [
         { id: 'timer-1', title: 'Timer 1' },
         { id: 'timer-2', title: 'Timer 2' }
@@ -771,8 +772,8 @@ describe('AllocationModal', () => {
       strategy4Radio.click();
 
       const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
-      percentageInputs[0].value = 50;
-      percentageInputs[1].value = 30;
+      percentageInputs[0].value = 70;
+      percentageInputs[1].value = 50;
       percentageInputs[0].dispatchEvent(new Event('input'));
 
       setTimeout(() => {
@@ -927,8 +928,8 @@ describe('AllocationModal', () => {
       document.querySelector('.allocation-modal input[value="percentage-distribution"]').click();
 
       const percentageInputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
-      percentageInputs[0].value = 50;
-      percentageInputs[1].value = 30;
+      percentageInputs[0].value = 70;
+      percentageInputs[1].value = 50;
       percentageInputs[0].dispatchEvent(new Event('input'));
 
       const applyButton = document.querySelector('.allocation-modal button.btn-apply');
@@ -1207,6 +1208,146 @@ describe('AllocationModal', () => {
       expect(dialog.getAttribute('aria-modal')).to.equal('true');
       expect(title.id).to.be.a('string').and.not.empty;
       expect(dialog.getAttribute('aria-labelledby')).to.equal(title.id);
+    });
+  });
+
+  describe('Discarding part of the idle time', () => {
+    const timers = [
+      { id: 'timer-1', title: 'Timer 1' },
+      { id: 'timer-2', title: 'Timer 2' }
+    ];
+    const choose = (value) => {
+      const radio = document.querySelector(`.allocation-modal input[value="${value}"]`);
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change'));
+    };
+    const apply = () => document.querySelector('.allocation-modal button.btn-apply').click();
+    const setMinutes = (index, value) => {
+      const input = document.querySelectorAll('.allocation-modal .fixed-distribution-form .minutes-input')[index];
+      input.value = String(value);
+      input.dispatchEvent(new Event('input'));
+    };
+    const setPercentages = (values) => {
+      const inputs = document.querySelectorAll('.allocation-modal .percentage-distribution-form .percentage-input');
+      values.forEach((value, index) => {
+        inputs[index].value = String(value);
+        inputs[index].dispatchEvent(new Event('input'));
+      });
+    };
+    const remainderSelect = () => document.querySelector('.allocation-modal .fixed-distribution-form .remainder-timer-select');
+    const remainingText = () => document.querySelector('.allocation-modal .fixed-distribution-form .remaining-time').textContent;
+    const totalText = () => document.querySelector('.allocation-modal .percentage-distribution-form .percentage-total').textContent;
+    const applyDisabled = () => document.querySelector('.allocation-modal button.btn-apply').disabled;
+
+    it('should offer discarding the rest after the timers in the remainder dropdown', () => {
+      modal = new AllocationModal(600000, timers, null);
+      modal.show();
+      choose('fixed-distribution');
+
+      const options = Array.from(remainderSelect().options);
+      expect(options.length).to.equal(3);
+      expect(options[options.length - 1].value).to.equal(DISCARD_REMAINDER);
+      expect(options[options.length - 1].textContent).to.include('Discard');
+      expect(remainderSelect().value, 'first timer stays the default').to.equal('timer-1');
+    });
+
+    it('should resolve a fixed split with the remainder discarded', (done) => {
+      modal = new AllocationModal(600000, timers, null);
+      const promise = modal.show();
+      choose('fixed-distribution');
+
+      setMinutes(0, 5);
+      remainderSelect().value = DISCARD_REMAINDER;
+      apply();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('fixed-distribution');
+        expect(result.config.allocations.get('timer-1')).to.equal(300000);
+        expect(result.config.allocations.has('timer-2')).to.be.false;
+        expect(result.config.remainderTimerId).to.equal(DISCARD_REMAINDER);
+        done();
+      }).catch(done);
+    });
+
+    it('should say the leftover is discarded once the remainder is dropped', () => {
+      modal = new AllocationModal(600000, timers, null);
+      modal.show();
+      choose('fixed-distribution');
+
+      setMinutes(0, 5);
+      expect(remainingText()).to.include('05:00');
+      expect(remainingText()).to.not.match(/discard/i);
+
+      remainderSelect().value = DISCARD_REMAINDER;
+      remainderSelect().dispatchEvent(new Event('change'));
+
+      expect(remainingText()).to.include('05:00');
+      expect(remainingText()).to.match(/discard/i);
+    });
+
+    it('should let a percentage split under 100 apply, discarding the rest', (done) => {
+      modal = new AllocationModal(600000, timers, null);
+      const promise = modal.show();
+      choose('percentage-distribution');
+
+      setPercentages([50, 30]);
+      expect(applyDisabled(), 'apply stays enabled under 100%').to.be.false;
+      apply();
+
+      promise.then(result => {
+        expect(result.strategy).to.equal('percentage-distribution');
+        expect(result.config.percentages.get('timer-1')).to.equal(50);
+        expect(result.config.percentages.get('timer-2')).to.equal(30);
+        expect(result.config.remainderTimerId).to.equal(DISCARD_REMAINDER);
+        done();
+      }).catch(done);
+    });
+
+    it('should report how much of the percentage split is discarded', () => {
+      modal = new AllocationModal(600000, timers, null);
+      modal.show();
+      choose('percentage-distribution');
+
+      setPercentages([50, 30]);
+      expect(totalText()).to.include('80%');
+      expect(totalText()).to.include('20% discarded');
+
+      setPercentages([50, 50]);
+      expect(totalText()).to.include('100%');
+      expect(totalText()).to.not.match(/discard/i);
+    });
+
+    it('should keep giving rounding dust to a timer when the split totals 100', (done) => {
+      modal = new AllocationModal(600000, timers, null);
+      const promise = modal.show();
+      choose('percentage-distribution');
+
+      setPercentages([50, 50]);
+      apply();
+
+      promise.then(result => {
+        expect(result.config.remainderTimerId).to.be.undefined;
+        done();
+      }).catch(done);
+    });
+
+    it('should still refuse a percentage split over 100', () => {
+      modal = new AllocationModal(600000, timers, null);
+      modal.show();
+      choose('percentage-distribution');
+
+      setPercentages([70, 50]);
+      expect(totalText()).to.include('120%');
+      expect(applyDisabled()).to.be.true;
+    });
+
+    it('should still refuse a percentage split that allocates nothing', () => {
+      modal = new AllocationModal(600000, timers, null);
+      modal.show();
+      choose('percentage-distribution');
+
+      setPercentages([0, 0]);
+      expect(applyDisabled()).to.be.true;
     });
   });
 

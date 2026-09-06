@@ -1,5 +1,5 @@
 import { expect } from '@esm-bundle/chai';
-import { allocateToSingle, allocateFixed, allocatePercentage, allocateDiscard } from '../js/timeDistributor.js';
+import { allocateToSingle, allocateFixed, allocatePercentage, allocateDiscard, DISCARD_REMAINDER } from '../js/timeDistributor.js';
 
 describe('TimeDistributor', () => {
   describe('allocateToSingle()', () => {
@@ -208,6 +208,50 @@ describe('TimeDistributor', () => {
 
       expect(result.get('t1')).to.equal(570);
       expect(result.get('t2')).to.equal(99430);
+    });
+  });
+
+  describe('discarding part of the time', () => {
+    it('allocateFixed should drop the remainder when it is sent to DISCARD_REMAINDER', () => {
+      const fixedMap = new Map([['t1', 10000], ['t2', 20000]]);
+      const result = allocateFixed(60000, fixedMap, DISCARD_REMAINDER);
+
+      expect(result.size).to.equal(2);
+      expect(result.get('t1')).to.equal(10000);
+      expect(result.get('t2')).to.equal(20000);
+    });
+
+    it('allocateFixed should allocate nothing when no timer is given an amount and the rest is discarded', () => {
+      const result = allocateFixed(60000, new Map(), DISCARD_REMAINDER);
+
+      expect(result.size).to.equal(0);
+    });
+
+    it('allocatePercentage should discard the unallocated share when sent to DISCARD_REMAINDER', () => {
+      const percentages = new Map([['t1', 50], ['t2', 30]]);
+      const result = allocatePercentage(60000, percentages, DISCARD_REMAINDER);
+
+      expect(result.size).to.equal(2);
+      expect(result.get('t1')).to.equal(30000);
+      expect(result.get('t2')).to.equal(18000);
+    });
+
+    it('allocatePercentage should discard rounding dust rather than passing it to the largest share', () => {
+      const percentages = new Map([['t1', 33], ['t2', 33]]);
+      const result = allocatePercentage(10, percentages, DISCARD_REMAINDER);
+
+      expect(result.get('t1')).to.equal(3);
+      expect(result.get('t2')).to.equal(3);
+    });
+
+    it('should still reject fixed amounts that exceed the idle time when the rest is discarded', () => {
+      expect(() => allocateFixed(60000, new Map([['t1', 90000]]), DISCARD_REMAINDER))
+        .to.throw(RangeError, 'Fixed allocations exceed total time');
+    });
+
+    it('should still reject percentages over 100 when the rest is discarded', () => {
+      expect(() => allocatePercentage(60000, new Map([['t1', 80], ['t2', 40]]), DISCARD_REMAINDER))
+        .to.throw(RangeError, 'Percentages exceed 100%');
     });
   });
 
