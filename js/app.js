@@ -12,7 +12,7 @@ const GOAL_PLACEHOLDER = '25m, 2h, 1:30';
 const GOAL_ERROR_MESSAGE = "Couldn't read that time. Try 25m, 1h 30m or 1:30";
 // How long the digits take to roll from the old time to the new one after idle
 // time lands on a card; the CSS ring is timed to pulse as the roll settles
-const TIME_ADDED_ROLL_MS = 1100;
+const TIME_ADDED_ROLL_MS = 880;
 
 // A goal is a minimum to reach, a budget a maximum not to exceed; the same
 // progress machinery drives both, only the words and colours differ
