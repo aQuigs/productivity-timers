@@ -653,6 +653,18 @@ describe('Layout and Overflow Tests', () => {
       expect(animationNames(card)).to.deep.equal([]);
     });
 
+    it('should leave no fill showing once the fill has finished while the ring is still playing', () => {
+      const card = createTestTimerCard();
+      document.getElementById('timer-container').appendChild(card);
+      card.classList.add('time-added');
+
+      card.getAnimations({ subtree: true })
+        .filter(animation => animation.animationName !== 'time-added-ring')
+        .forEach(animation => animation.finish());
+
+      expect(window.getComputedStyle(card, '::before').opacity).to.equal('0');
+    });
+
     it('should not animate a card that has not just received time', () => {
       const card = createTestTimerCard();
       document.getElementById('timer-container').appendChild(card);
