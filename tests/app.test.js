@@ -69,6 +69,11 @@ describe('App', () => {
     return document.querySelectorAll('.allocation-modal');
   }
 
+  function displaySeconds(el) {
+    const [h, m, sec] = el.textContent.split(':').map(Number);
+    return h * 3600 + m * 60 + sec;
+  }
+
   function applyPreviousTimer() {
     document.querySelector('.allocation-modal input[value="previous-timer"]').click();
     applyDefault();
@@ -265,6 +270,140 @@ describe('App', () => {
       await tick();
 
       expect(app.timerManager.getTimer(runningId).getElapsedMs()).to.be.at.least(30000);
+    });
+
+    it('should animate the card that received idle time and leave the others alone', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const cards = [...document.querySelectorAll('.timer-card')];
+      expect(cards.length).to.equal(2);
+      cards.forEach(card => {
+        expect(card.classList.contains('time-added')).to.equal(card.dataset.timerId === runningId);
+      });
+    });
+
+    it('should take the class off once no time-added animation is still playing', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const card = document.querySelector(`.timer-card[data-timer-id="${runningId}"]`);
+      card.querySelector('.timer-display').dispatchEvent(new AnimationEvent('animationend', { bubbles: true }));
+      expect(card.classList.contains('time-added')).to.be.false;
+    });
+
+    it('should roll the display and the total up from the old time to the new one', async () => {
+      container.insertAdjacentHTML('beforeend', '<span id="total-time"></span>');
+      const runningId = seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const display = document.querySelector(`.timer-card[data-timer-id="${runningId}"] .timer-display`);
+      const total = document.getElementById('total-time');
+      expect(displaySeconds(display)).to.be.below(15);
+      expect(displaySeconds(total)).to.be.below(15);
+
+      await tick(1200);
+      const elapsedSeconds = Math.floor(app.timerManager.getTimer(runningId).getElapsedMs() / 1000);
+      expect(displaySeconds(display)).to.be.at.least(15).and.at.most(elapsedSeconds);
+      expect(displaySeconds(total)).to.be.at.least(15).and.at.most(elapsedSeconds);
+    });
+
+    it('should fill the goal bar in step with the rolling digits but notify from the real time', async () => {
+      const notifier = { requestPermission: () => {}, notifications: [], notify(title, body) { this.notifications.push({ title, body }); } };
+      const runningId = seedRunningTimer();
+      new TimerManager().setTimerTarget(runningId, 10000);
+      createApp({ notifier });
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const card = document.querySelector(`.timer-card[data-timer-id="${runningId}"]`);
+      expect(notifier.notifications).to.have.lengthOf(1);
+      expect(card.classList.contains('over-target')).to.be.false;
+
+      await tick(1200);
+      expect(card.classList.contains('over-target')).to.be.true;
+      expect(notifier.notifications).to.have.lengthOf(1);
+    });
+
+    it('should show the new time at once and skip the animation when reduced motion is preferred', async () => {
+      const runningId = seedRunningTimer();
+      createApp();
+      app.reducedMotion = true;
+
+      await returnAfter(15000);
+      applyPreviousTimer();
+      await tick();
+
+      const card = document.querySelector(`.timer-card[data-timer-id="${runningId}"]`);
+      expect(card.classList.contains('time-added')).to.be.false;
+      expect(displaySeconds(card.querySelector('.timer-display'))).to.be.at.least(15);
+    });
+
+    describe('with the stylesheet loaded', () => {
+      let link;
+
+      before(async () => {
+        link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/css/styles.css';
+        document.head.appendChild(link);
+        await new Promise(resolve => {
+          link.onload = resolve;
+          link.onerror = resolve;
+        });
+      });
+
+      after(() => link.remove());
+
+      it('should keep the class until the fill, glow and ring have all finished', async () => {
+        const runningId = seedRunningTimer();
+        createApp();
+
+        await returnAfter(15000);
+        applyPreviousTimer();
+        await tick();
+
+        const card = document.querySelector(`.timer-card[data-timer-id="${runningId}"]`);
+        const timeAddedAnimations = () => card.getAnimations({ subtree: true })
+          .filter(animation => animation.animationName?.startsWith('time-added-'));
+        expect(timeAddedAnimations().length).to.equal(3);
+
+        const stillOnAtFirstEnd = await new Promise(resolve => {
+          card.addEventListener('animationend', () => resolve(card.classList.contains('time-added')), { once: true });
+        });
+        expect(stillOnAtFirstEnd).to.be.true;
+
+        while (card.classList.contains('time-added')) {
+          await tick(50);
+        }
+        expect(timeAddedAnimations().length).to.equal(0);
+      });
+    });
+
+    it('should not animate any card when the idle time is discarded', async () => {
+      seedRunningTimer();
+      createApp();
+
+      await returnAfter(15000);
+      document.querySelector('.allocation-modal input[value="discard"]').click();
+      applyDefault();
+      await tick();
+
+      expect(document.querySelectorAll('.timer-card.time-added').length).to.equal(0);
     });
 
     it('should still offer the previous timer after a reload while the modal was open', async () => {
