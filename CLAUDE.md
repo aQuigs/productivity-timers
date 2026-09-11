@@ -35,6 +35,7 @@ timers/
 ├── js/
 │   ├── main.js              # Bootstrap: creates App on DOMContentLoaded, registers the service worker on load
 │   ├── pwa.js               # registerServiceWorker(container): relative ./sw.js registration, failure-tolerant
+│   ├── installButton.js     # setupInstallButton(): top-bar "Install app" button over beforeinstallprompt, menu hints for iOS/Android
 │   ├── offlineCache.js      # APP_SHELL list + cache strategy (shellCacheName, precache, pruneCaches, networkFirst)
 │   ├── app.js               # App: DOM rendering, event binding, RAF update loop, idle flow
 │   ├── timer.js             # Timer: individual timer state (private fields)
@@ -61,6 +62,7 @@ timers/
 │   ├── notifier.test.js
 │   ├── formatDuration.test.js
 │   ├── pwa.test.js           # registerServiceWorker, index.html/manifest contracts, a real install of sw.js
+│   ├── installButton.test.js # Install button: prompt replay, hints per platform, hidden when standalone
 │   ├── offlineCache.test.js  # Cache strategy against the real Cache API; APP_SHELL must cover every imported module
 │   ├── integration.test.js
 │   ├── layout.test.js        # CSS contracts: grid widths, tabular digits, top bar overflow
@@ -159,6 +161,7 @@ When a user starts timer B while timer A is running:
 - `main.js` calls `registerServiceWorker(navigator.serviceWorker)` on window `load`, which registers `./sw.js` as a module worker (relative, so each deployment's worker is scoped to its own folder). No support or a failed registration resolves to `null` and only costs offline use
 - `sw.js` is a thin module worker over `offlineCache.js`: on install it precaches `APP_SHELL` (every file the page needs, fetched with `cache: 'reload'`; a missing file fails the install rather than installing half a shell) and calls `skipWaiting()`; on activate it prunes older caches of the same scope and claims clients; on fetch it answers only same-origin GETs (`isAppRequest`), network-first with the cache refreshed on every `ok` response, cache fallback when the network is unreachable (`ignoreSearch`), and the cached `./index.html` for an offline navigation to any URL in scope. The cross-origin Inter stylesheet is left to the browser, so offline the app uses the system font stack
 - Cache names come from `shellCacheName(scope)` = `timers:<scope pathname>:<CACHE_VERSION>`. CacheStorage is shared by the origin, so the scope path keeps production and previews apart (entries are keyed by full URL anyway) and `pruneCaches()` only deletes same-scope caches with another version. Bump `CACHE_VERSION` when the shell layout changes in a way a stale cache could not serve
+- The top bar's `#install-btn` ("Install app", `.btn-install`, hidden by default) and `#install-hint` (`role="status"`) are driven by `setupInstallButton()` in `installButton.js`, wired at the top of `main.js` so an early `beforeinstallprompt` is not missed. The button shows when that event fires (the event is kept and its `prompt()` replayed on click; a dismissed prompt is consumed, so the button hides again on desktop until the browser fires a new one) or, without the event, on iOS and Android where a browser-menu path exists (`platformHint()`: Share sheet on iOS, "Install" / "Add to Home screen" in the menu on Android); a click there shows the hint. `appinstalled` and running standalone (`isStandalone()`: display-mode media query or iOS `navigator.standalone`) hide it. On phones the button takes its own row above Reset all / Add timer (`.controls` wraps)
 - Adding a module the app imports means adding it to `APP_SHELL`; `offlineCache.test.js` walks the import graph from `js/main.js` and fails when one is missing. `pwa.test.js` registers the real `sw.js` under the throwaway scope `/__pwa-test__/` (no test page lives there, so the worker never intercepts the runner) and asserts the precache; it unregisters and deletes the cache afterwards
 
 ## Commands

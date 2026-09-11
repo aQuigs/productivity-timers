@@ -80,6 +80,7 @@ A browser-based time tracker with multiple timers that function like a chess clo
 │   ├── timerManager.js     # TimerManager class (orchestration)
 │   ├── app.js              # DOM manipulation and event handling
 │   ├── pwa.js              # Service worker registration
+│   ├── installButton.js    # "Install app" button in the top bar
 │   └── offlineCache.js     # App shell list and cache strategy used by sw.js
 ├── tests/
 │   ├── timer.test.js       # Unit tests for Timer class
@@ -122,7 +123,7 @@ Pull requests get a preview at `https://aquigs.github.io/productivity-timers/pr-
 
 ## Installing as an App
 
-The site is a Progressive Web App. Use your browser's "Install" or "Add to Home Screen" action to open it in its own window. A service worker caches the app after the first visit, so it keeps opening without a connection; while online every load fetches the latest deployment, so an update shows up on the next visit. Production and each PR preview install as separate apps with separate caches. After editing `icons/icon.svg`, regenerate the PNG icons:
+The site is a Progressive Web App. An "Install app" button appears in the top bar when your browser can install it (Chrome, Edge and other Chromium browsers open their install dialog from it; on iPhone and Android it explains the browser's own menu path). You can also use the browser's "Install" or "Add to Home screen" action directly. A service worker caches the app after the first visit, so it keeps opening without a connection; while online every load fetches the latest deployment, so an update shows up on the next visit. Production and each PR preview install as separate apps with separate caches. After editing `icons/icon.svg`, regenerate the PNG icons:
 
 ```bash
 node scripts/generate-icons.mjs
