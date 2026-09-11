@@ -52,6 +52,7 @@
     --icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%238a8a94' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
     --icon-grip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='5.5' cy='3.5' r='1.5'/%3E%3Ccircle cx='10.5' cy='3.5' r='1.5'/%3E%3Ccircle cx='5.5' cy='8' r='1.5'/%3E%3Ccircle cx='10.5' cy='8' r='1.5'/%3E%3Ccircle cx='5.5' cy='12.5' r='1.5'/%3E%3Ccircle cx='10.5' cy='12.5' r='1.5'/%3E%3C/svg%3E");
     --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2316171c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");
+    --icon-install: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7 1.5h2v6.3l2.2-2.2 1.4 1.4L8 11.6 3.4 7l1.4-1.4L7 7.8z'/%3E%3Cpath d='M2 10.5h2V13h8v-2.5h2v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: light) {
@@ -233,7 +234,15 @@ button {
 
 .controls {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
+}
+
+.install-hint {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-2);
 }
 
 /* ------------------------------------------------------------------
@@ -337,6 +346,22 @@ button {
 
 .btn-reset {
     --icon: var(--icon-reset);
+}
+
+.btn-install {
+    --icon: var(--icon-install);
+    padding-left: 13px;
+    color: var(--accent-text);
+    border-color: var(--accent-line);
+}
+
+.btn-install::before {
+    display: block;
+}
+
+.btn-install:hover {
+    background: var(--accent-soft);
+    color: var(--accent-text);
 }
 
 /* ------------------------------------------------------------------
@@ -1260,6 +1285,10 @@ button {
 
     .controls .btn {
         flex: 1 1 0;
+    }
+
+    .controls .btn-install {
+        flex: 1 1 100%;
     }
 
     .timer-card {

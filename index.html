@@ -7,6 +7,11 @@
     <meta name="theme-color" content="#0c0d10" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#f5f5f6" media="(prefers-color-scheme: light)">
     <title>Productivity Timers</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Timers">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c8f55a'/%3E%3Ccircle cx='16' cy='16.5' r='8.5' fill='none' stroke='%23111405' stroke-width='2.5'/%3E%3Cpath d='M16 11.5v5l3.5 2.2' fill='none' stroke='%23111405' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,9 +40,11 @@
             </div>
 
             <div class="controls">
+                <button id="install-btn" class="btn btn-secondary btn-install" type="button" hidden>Install app</button>
                 <button id="reset-all-btn" class="btn btn-secondary btn-reset" type="button">Reset all</button>
                 <button id="add-timer-btn" class="btn btn-primary" type="button">Add timer</button>
             </div>
+            <p id="install-hint" class="install-hint" role="status" hidden></p>
         </header>
 
         <main>
