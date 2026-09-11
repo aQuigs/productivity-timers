@@ -689,11 +689,46 @@ describe('Layout and Overflow Tests', () => {
           <span id="total-time" class="summary-value">00:00:00</span>
         </div>
         <div class="controls">
+          <button id="install-btn" class="btn btn-secondary btn-install" hidden>Install app</button>
           <button id="reset-all-btn" class="btn btn-secondary">Reset all</button>
           <button id="add-timer-btn" class="btn btn-primary">Add timer</button>
         </div>
+        <p id="install-hint" class="install-hint" role="status" hidden></p>
       `;
       return header;
+    }
+
+    function expectInside(topBar, containerRect, selector) {
+      topBar.querySelectorAll(selector).forEach(el => {
+        if (el.hidden) return;
+        const rect = el.getBoundingClientRect();
+        expect(rect.right).to.be.at.most(containerRect.right + 1,
+          `${el.className} should stay inside the container`);
+        expect(rect.left).to.be.at.least(containerRect.left - 1,
+          `${el.className} should stay inside the container`);
+      });
+    }
+
+    // A 320px container inside the runner's wide viewport never matches the phone media
+    // query, so rules that depend on it are checked inside a phone-sized iframe
+    async function phoneViewport(topBar) {
+      const frame = document.createElement('iframe');
+      frame.style.width = '320px';
+      frame.style.height = '480px';
+      frame.style.border = '0';
+      container.appendChild(frame);
+      const doc = frame.contentDocument;
+      doc.open();
+      doc.write('<!DOCTYPE html><html><head><link rel="stylesheet" href="/css/styles.css"></head><body><div class="app-container"></div></body></html>');
+      doc.close();
+      doc.querySelector('.app-container').appendChild(doc.adoptNode(topBar));
+      const link = doc.querySelector('link');
+      await new Promise(resolve => {
+        if (link.sheet) resolve();
+        link.onload = resolve;
+        link.onerror = resolve;
+      });
+      return doc;
     }
 
     it('should not overflow horizontally on a phone-width layout', () => {
@@ -702,14 +737,22 @@ describe('Layout and Overflow Tests', () => {
       const topBar = createTopBar();
       appContainer.prepend(topBar);
 
-      const containerRect = appContainer.getBoundingClientRect();
-      topBar.querySelectorAll('.btn, .summary, .brand').forEach(el => {
-        const rect = el.getBoundingClientRect();
-        expect(rect.right).to.be.at.most(containerRect.right + 1,
-          `${el.className} should stay inside the container`);
-        expect(rect.left).to.be.at.least(containerRect.left - 1,
-          `${el.className} should stay inside the container`);
-      });
+      expectInside(topBar, appContainer.getBoundingClientRect(), '.btn, .summary, .brand');
+    });
+
+    it('should give the install button its own row on a phone when shown', async () => {
+      const doc = await phoneViewport(createTopBar());
+      const topBar = doc.querySelector('.topbar');
+      const install = topBar.querySelector('#install-btn');
+      const hint = topBar.querySelector('#install-hint');
+      install.hidden = false;
+      hint.hidden = false;
+      hint.textContent = 'Open the browser menu and choose "Install" or "Add to Home screen".';
+
+      expectInside(topBar, doc.querySelector('.app-container').getBoundingClientRect(), '.btn, .summary, .brand, .install-hint');
+      const reset = topBar.querySelector('#reset-all-btn').getBoundingClientRect();
+      expect(install.getBoundingClientRect().bottom, 'install button sits above the other controls')
+        .to.be.at.most(reset.top + 1);
     });
 
     it('should show the total using tabular numerals', () => {

@@ -93,6 +93,21 @@ describe('PWA', () => {
       const main = await (await fetch('/js/main.js', { cache: 'no-store' })).text();
       expect(main).to.include('registerServiceWorker');
     });
+
+    it('has an install button and hint in the top bar, hidden until a browser can use them', async () => {
+      const button = doc.querySelector('.topbar .controls #install-btn');
+      expect(button).to.not.equal(null);
+      expect(button.hidden).to.equal(true);
+      expect(button.textContent.trim()).to.equal('Install app');
+
+      const hint = doc.querySelector('.topbar #install-hint');
+      expect(hint).to.not.equal(null);
+      expect(hint.hidden).to.equal(true);
+      expect(hint.getAttribute('role')).to.equal('status');
+
+      const main = await (await fetch('/js/main.js', { cache: 'no-store' })).text();
+      expect(main).to.include('setupInstallButton');
+    });
   });
 
   describe('manifest.webmanifest', () => {

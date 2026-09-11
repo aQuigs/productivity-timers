@@ -16,6 +16,7 @@ export const APP_SHELL = [
   './js/main.js',
   './js/app.js',
   './js/pwa.js',
+  './js/installButton.js',
   './js/timer.js',
   './js/timerManager.js',
   './js/storageService.js',
