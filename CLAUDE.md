@@ -20,15 +20,22 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - localStorage persistence: timer state persists across page reloads
 - Dark UI by default with a light palette via `prefers-color-scheme`; responsive down to phone widths
 - Header shows the running total across all timers
+- Installable PWA (web app manifest, home-screen icons) with a service worker that keeps the app opening offline
 
 ## Project Structure
 
 ```
 timers/
 ├── index.html                 # Main HTML entry point (top bar, timer grid; loads js/main.js)
+├── manifest.webmanifest      # Web app manifest: name, standalone display, relative start_url/scope, icons
+├── sw.js                     # Module service worker: wires install/activate/fetch to js/offlineCache.js
+├── icons/                    # icon.svg (source) + PNGs the manifest and iOS need (regenerate: node scripts/generate-icons.mjs)
+├── scripts/generate-icons.mjs # Renders icon.svg to the PNG sizes with Playwright Chromium
 ├── css/styles.css            # Styling: design tokens, dark + light (prefers-color-scheme)
 ├── js/
-│   ├── main.js              # Bootstrap: creates App on DOMContentLoaded (keeps app.js importable in tests)
+│   ├── main.js              # Bootstrap: creates App on DOMContentLoaded, registers the service worker on load
+│   ├── pwa.js               # registerServiceWorker(container): relative ./sw.js registration, failure-tolerant
+│   ├── offlineCache.js      # APP_SHELL list + cache strategy (shellCacheName, precache, pruneCaches, networkFirst)
 │   ├── app.js               # App: DOM rendering, event binding, RAF update loop, idle flow
 │   ├── timer.js             # Timer: individual timer state (private fields)
 │   ├── timerManager.js      # TimerManager: orchestrates timers, enforces chess-clock
@@ -53,6 +60,8 @@ timers/
 │   ├── parseDuration.test.js
 │   ├── notifier.test.js
 │   ├── formatDuration.test.js
+│   ├── pwa.test.js           # registerServiceWorker, index.html/manifest contracts, a real install of sw.js
+│   ├── offlineCache.test.js  # Cache strategy against the real Cache API; APP_SHELL must cover every imported module
 │   ├── integration.test.js
 │   ├── layout.test.js        # CSS contracts: grid widths, tabular digits, top bar overflow
 │   ├── closeButton.test.js   # Remove button must stay 36px square with red tint
@@ -144,6 +153,13 @@ When a user starts timer B while timer A is running:
 - The previously running timer is auto-started on restore (from its saved elapsed time); the gap since the last save is handled by the IdleDetector
 - `App.handleResetAll()` delegates to `TimerManager.resetAll()` so the reset is persisted like every other state change
 - **PR preview isolation**: previews deploy to `/pr-previews/pr-<n>/` on the same origin as production, so every localStorage key (timer state, `last_heartbeat`, `accumulated_idle_ms`, `app_hidden_running_timers`) goes through `storageNamespace.js`, which prefixes it with `pr-<n>:` there and leaves it untouched elsewhere. Each preview gets its own bucket and production keeps its historical keys. IdleDetector and App resolve their keys once at construction; tests simulate a preview with `atPreviewPath()` from `tests/helpers.js`
+
+**PWA / offline:**
+- `index.html` links `manifest.webmanifest` (relative `start_url`/`scope` of `./`, `display: standalone`, no `id`, so production and each PR preview install as separate apps), the `mobile-web-app-capable` / `apple-mobile-web-app-*` metas and `icons/apple-touch-icon.png` (iOS ignores manifest icons). `theme_color`/`background_color` equal the dark `theme-color` meta; a test keeps them in sync
+- `main.js` calls `registerServiceWorker(navigator.serviceWorker)` on window `load`, which registers `./sw.js` as a module worker (relative, so each deployment's worker is scoped to its own folder). No support or a failed registration resolves to `null` and only costs offline use
+- `sw.js` is a thin module worker over `offlineCache.js`: on install it precaches `APP_SHELL` (every file the page needs, fetched with `cache: 'reload'`; a missing file fails the install rather than installing half a shell) and calls `skipWaiting()`; on activate it prunes older caches of the same scope and claims clients; on fetch it answers only same-origin GETs (`isAppRequest`), network-first with the cache refreshed on every `ok` response, cache fallback when the network is unreachable (`ignoreSearch`), and the cached `./index.html` for an offline navigation to any URL in scope. The cross-origin Inter stylesheet is left to the browser, so offline the app uses the system font stack
+- Cache names come from `shellCacheName(scope)` = `timers:<scope pathname>:<CACHE_VERSION>`. CacheStorage is shared by the origin, so the scope path keeps production and previews apart (entries are keyed by full URL anyway) and `pruneCaches()` only deletes same-scope caches with another version. Bump `CACHE_VERSION` when the shell layout changes in a way a stale cache could not serve
+- Adding a module the app imports means adding it to `APP_SHELL`; `offlineCache.test.js` walks the import graph from `js/main.js` and fails when one is missing. `pwa.test.js` registers the real `sw.js` under the throwaway scope `/__pwa-test__/` (no test page lives there, so the worker never intercepts the runner) and asserts the precache; it unregisters and deletes the cache afterwards
 
 ## Commands
 
