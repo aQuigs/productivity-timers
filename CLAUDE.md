@@ -64,10 +64,7 @@ timers/
 │   ├── pwa.test.js           # registerServiceWorker, index.html/manifest contracts, a real install of sw.js
 │   ├── installButton.test.js # Install button: prompt replay, hints per platform, hidden when standalone
 │   ├── offlineCache.test.js  # Cache strategy against the real Cache API; APP_SHELL must cover every imported module
-│   ├── integration.test.js
-│   ├── layout.test.js        # CSS contracts: grid widths, tabular digits, top bar overflow
-│   ├── closeButton.test.js   # Remove button must stay 36px square with red tint
-│   └── closeButtonReal.test.js
+│   └── layout.test.js        # CSS contracts on cards App renders: grid widths, tabular digits, remove button, top bar overflow
 ├── web-test-runner.config.js # Test runner configuration
 └── package.json              # Dependencies: @web/test-runner, Playwright
 ```
@@ -205,7 +202,8 @@ npm run lint          # (Note: not configured; would need eslint/setup)
 
 **Test Coverage Requirements:**
 - Minimum 80% coverage (statements, branches, functions, lines)
-- Integration tests required for: inter-module contracts, storage persistence, DOM interactions
+- Integration tests required for: inter-module contracts, storage persistence, DOM interactions (they live in `app.test.js`, driving the real App through the DOM; do not reimplement app logic inside a test)
+- Test the behaviour, not the shape: no tests that only assert an element or method exists, restate a constant, or duplicate a case another test already covers
 - Unit tests for: Timer state machine, TimerManager chess-clock logic, StorageService validation
 
 ## Testing Infrastructure
