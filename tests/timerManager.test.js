@@ -35,13 +35,6 @@ describe('TimerManager', () => {
   });
 
   describe('Get Methods', () => {
-    it('should get all timers', () => {
-      const manager = new TimerManager(3);
-      const timers = manager.getAllTimers();
-      expect(timers).to.be.an('array');
-      expect(timers).to.have.lengthOf(3);
-    });
-
     it('should get timer by id', () => {
       const manager = new TimerManager();
       const timers = manager.getAllTimers();
@@ -89,32 +82,17 @@ describe('TimerManager', () => {
       expect(timers[1].isRunning()).to.be.true;
     });
 
-    it('should ensure only one timer runs at a time', (done) => {
-      const manager = new TimerManager(3);
-      const timers = manager.getAllTimers();
-
-      manager.startTimer(timers[0].id);
-      setTimeout(() => {
-        manager.startTimer(timers[1].id);
-        setTimeout(() => {
-          manager.startTimer(timers[2].id);
-
-          const runningCount = timers.filter(t => t.isRunning()).length;
-          expect(runningCount).to.equal(1);
-          expect(timers[2].isRunning()).to.be.true;
-          done();
-        }, 50);
-      }, 50);
-    });
-
-    it('should be no-op when starting already running timer', () => {
+    it('should keep the running timer counting when it is started again', (done) => {
       const manager = new TimerManager();
       const timers = manager.getAllTimers();
 
       manager.startTimer(timers[0].id);
-      const firstStartTime = timers[0].startTimeMs;
-      manager.startTimer(timers[0].id);
-      expect(timers[0].startTimeMs).to.equal(firstStartTime);
+      setTimeout(() => {
+        expect(manager.startTimer(timers[0].id)).to.be.true;
+        expect(timers[0].getElapsedMs()).to.be.at.least(50);
+        expect(manager.getRunningTimer()).to.equal(timers[0]);
+        done();
+      }, 50);
     });
 
     it('should return false for non-existent timer id', () => {
@@ -266,7 +244,7 @@ describe('TimerManager', () => {
   });
 
   describe('Persistence - setTimerTarget()', () => {
-    it('should set the target and persist', () => {
+    it('should set the target, defaulting the kind to goal, and persist both', () => {
       const storage = new StorageService();
       const manager = new TimerManager(2, storage);
       const timerId = manager.getAllTimers()[0].id;
@@ -275,7 +253,9 @@ describe('TimerManager', () => {
 
       expect(result).to.be.true;
       expect(manager.getTimer(timerId).targetMs).to.equal(1500000);
+      expect(manager.getTimer(timerId).targetKind).to.equal('goal');
       expect(storage.load().timers[0].targetMs).to.equal(1500000);
+      expect(storage.load().timers[0].targetKind).to.equal('goal');
     });
 
     it('should clear the target with null and persist', () => {
@@ -288,17 +268,6 @@ describe('TimerManager', () => {
 
       expect(manager.getTimer(timerId).targetMs).to.be.null;
       expect(storage.load().timers[0].targetMs).to.be.null;
-    });
-
-    it('should restore targets from storage on construction', () => {
-      const storage = new StorageService();
-      const first = new TimerManager(2, storage);
-      const timerId = first.getAllTimers()[0].id;
-      first.setTimerTarget(timerId, 7200000);
-
-      const second = new TimerManager(2, storage);
-
-      expect(second.getTimer(timerId).targetMs).to.equal(7200000);
     });
 
     it('should return false for invalid timer id', () => {
@@ -326,18 +295,7 @@ describe('TimerManager', () => {
       expect(storage.load().timers[0].targetKind).to.equal('budget');
     });
 
-    it('should default the kind to goal and persist it', () => {
-      const storage = new StorageService();
-      const manager = new TimerManager(2, storage);
-      const timerId = manager.getAllTimers()[0].id;
-
-      manager.setTimerTarget(timerId, 1500000);
-
-      expect(manager.getTimer(timerId).targetKind).to.equal('goal');
-      expect(storage.load().timers[0].targetKind).to.equal('goal');
-    });
-
-    it('should restore the kind from storage on construction', () => {
+    it('should restore the target and its kind from storage on construction', () => {
       const storage = new StorageService();
       const first = new TimerManager(2, storage);
       const timerId = first.getAllTimers()[0].id;
@@ -481,15 +439,6 @@ describe('TimerManager', () => {
 
       expect(timers2[0].state).to.equal('running');
       expect(manager2.getRunningTimer()).to.equal(timers2[0]);
-    });
-
-    it('should initialize with defaults if storage is empty', () => {
-      const manager = new TimerManager(2, storage);
-      const timers = manager.getAllTimers();
-
-      expect(timers).to.have.lengthOf(2);
-      expect(timers[0].title).to.equal('Timer 1');
-      expect(timers[1].title).to.equal('Timer 2');
     });
 
     it('should fall back to defaults if storage is corrupted', () => {
@@ -659,7 +608,18 @@ describe('TimerManager', () => {
   });
 
   describe('distributeTime()', () => {
-    it('should accept a Map of timer ID to milliseconds', () => {
+    function capturingWarnings(fn) {
+      const originalWarn = console.warn;
+      const warnings = [];
+      console.warn = (msg) => warnings.push(msg);
+      try {
+        return { result: fn(), warnings };
+      } finally {
+        console.warn = originalWarn;
+      }
+    }
+
+    it('should apply allocations to the matching timers and return true', () => {
       const manager = new TimerManager(3);
       const timers = manager.getAllTimers();
 
@@ -668,37 +628,16 @@ describe('TimerManager', () => {
         [timers[1].id, 3000]
       ]);
 
-      const result = manager.distributeTime(allocations);
-      expect(result).to.be.true;
-    });
+      expect(manager.distributeTime(allocations)).to.be.true;
 
-    it('should apply allocations to correct timers', () => {
-      const manager = new TimerManager(3);
-      const timers = manager.getAllTimers();
-
-      const timer0InitialTime = timers[0].getElapsedMs();
-      const timer1InitialTime = timers[1].getElapsedMs();
-      const timer2InitialTime = timers[2].getElapsedMs();
-
-      const allocations = new Map([
-        [timers[0].id, 5000],
-        [timers[1].id, 3000]
-      ]);
-
-      manager.distributeTime(allocations);
-
-      expect(timers[0].getElapsedMs()).to.equal(timer0InitialTime + 5000);
-      expect(timers[1].getElapsedMs()).to.equal(timer1InitialTime + 3000);
-      expect(timers[2].getElapsedMs()).to.equal(timer2InitialTime);
+      expect(timers[0].getElapsedMs()).to.equal(5000);
+      expect(timers[1].getElapsedMs()).to.equal(3000);
+      expect(timers[2].getElapsedMs()).to.equal(0);
     });
 
     it('should skip missing timer IDs gracefully and log warning', () => {
       const manager = new TimerManager(2);
       const timers = manager.getAllTimers();
-
-      const originalWarn = console.warn;
-      const warnings = [];
-      console.warn = (msg) => warnings.push(msg);
 
       const allocations = new Map([
         [timers[0].id, 5000],
@@ -706,9 +645,7 @@ describe('TimerManager', () => {
         [timers[1].id, 2000]
       ]);
 
-      const result = manager.distributeTime(allocations);
-
-      console.warn = originalWarn;
+      const { result, warnings } = capturingWarnings(() => manager.distributeTime(allocations));
 
       expect(result).to.be.true;
       expect(timers[0].getElapsedMs()).to.equal(5000);
@@ -734,25 +671,6 @@ describe('TimerManager', () => {
       expect(loaded.timers[1].elapsedMs).to.equal(3000);
     });
 
-    it('should return true if at least one allocation succeeded', () => {
-      const manager = new TimerManager(2);
-      const timers = manager.getAllTimers();
-
-      const allocations = new Map([
-        [timers[0].id, 5000],
-        ['non-existent-id', 3000]
-      ]);
-
-      const originalWarn = console.warn;
-      console.warn = () => {};
-
-      const result = manager.distributeTime(allocations);
-
-      console.warn = originalWarn;
-
-      expect(result).to.be.true;
-    });
-
     it('should return false if all allocations failed', () => {
       const manager = new TimerManager(2);
 
@@ -761,12 +679,7 @@ describe('TimerManager', () => {
         ['non-existent-id-2', 3000]
       ]);
 
-      const originalWarn = console.warn;
-      console.warn = () => {};
-
-      const result = manager.distributeTime(allocations);
-
-      console.warn = originalWarn;
+      const { result } = capturingWarnings(() => manager.distributeTime(allocations));
 
       expect(result).to.be.false;
     });

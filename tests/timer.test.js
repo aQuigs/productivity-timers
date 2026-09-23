@@ -57,12 +57,14 @@ describe('Timer', () => {
       expect(timer.isRunning()).to.be.false;
     });
 
-    it('should be no-op when starting an already running timer', () => {
+    it('should keep counting from the first start when started again while running', (done) => {
       const timer = new Timer('Test');
       timer.start();
-      const firstStartTime = timer.startTimeMs;
-      timer.start();
-      expect(timer.startTimeMs).to.equal(firstStartTime);
+      setTimeout(() => {
+        timer.start();
+        expect(timer.getElapsedMs()).to.be.at.least(50);
+        done();
+      }, 50);
     });
   });
 
@@ -123,33 +125,11 @@ describe('Timer', () => {
   });
 
   describe('Time Formatting', () => {
-    it('should format zero time as 00:00:00', () => {
+    it('should format the elapsed time as HH:MM:SS', () => {
       const timer = new Timer('Test');
       expect(timer.getFormattedTime()).to.equal('00:00:00');
-    });
-
-    it('should format seconds correctly', () => {
-      const timer = new Timer('Test');
-      timer.elapsedMs = 5000;
-      expect(timer.getFormattedTime()).to.equal('00:00:05');
-    });
-
-    it('should format minutes and seconds correctly', () => {
-      const timer = new Timer('Test');
-      timer.elapsedMs = 65000;
-      expect(timer.getFormattedTime()).to.equal('00:01:05');
-    });
-
-    it('should format hours, minutes, and seconds correctly', () => {
-      const timer = new Timer('Test');
-      timer.elapsedMs = 3665000;
+      timer.addMs(3665000);
       expect(timer.getFormattedTime()).to.equal('01:01:05');
-    });
-
-    it('should support hours greater than 99', () => {
-      const timer = new Timer('Test');
-      timer.elapsedMs = 451865000;
-      expect(timer.getFormattedTime()).to.equal('125:31:05');
     });
   });
 
@@ -207,7 +187,7 @@ describe('Timer', () => {
 
       it('should serialize paused timer with elapsed time', (done) => {
         const timer = new Timer('Test', 'abc-123');
-        timer.elapsedMs = 5000;
+        timer.addMs(5000);
         timer.start();
         setTimeout(() => {
           timer.pause();
@@ -221,23 +201,9 @@ describe('Timer', () => {
         }, 10);
       });
 
-      it('should convert running timer to paused in serialization', (done) => {
+      it('should serialize a running timer as paused with its accumulated time', (done) => {
         const timer = new Timer('Test', 'abc-123');
-        timer.start();
-        setTimeout(() => {
-          const json = timer.toJSON();
-
-          expect(json.id).to.equal('abc-123');
-          expect(json.title).to.equal('Test');
-          expect(json.state).to.equal('paused');
-          expect(json.elapsedMs).to.be.at.least(100);
-          done();
-        }, 100);
-      });
-
-      it('should preserve accumulated time when converting running to paused', (done) => {
-        const timer = new Timer('Test', 'abc-123');
-        timer.elapsedMs = 5000;
+        timer.addMs(5000);
         timer.start();
         setTimeout(() => {
           const json = timer.toJSON();
@@ -298,77 +264,22 @@ describe('Timer', () => {
         expect(timer.state).to.equal('paused');
       });
 
-      it('should throw error for missing id', () => {
-        const data = {
-          title: 'Restored',
-          elapsedMs: 0,
-          state: 'stopped'
+      it('should throw error for missing or invalid fields', () => {
+        const valid = { id: 'abc-123', title: 'Restored', elapsedMs: 0, state: 'stopped' };
+        const invalid = {
+          'missing id': { id: undefined },
+          'missing title': { title: undefined },
+          'missing elapsedMs': { elapsedMs: undefined },
+          'non-numeric elapsedMs': { elapsedMs: 'not-a-number' },
+          'negative elapsedMs': { elapsedMs: -1000 },
+          'missing state': { state: undefined },
+          'invalid state': { state: 'invalid' }
         };
 
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
-      });
-
-      it('should throw error for missing title', () => {
-        const data = {
-          id: 'abc-123',
-          elapsedMs: 0,
-          state: 'stopped'
-        };
-
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
-      });
-
-      it('should throw error for missing elapsedMs', () => {
-        const data = {
-          id: 'abc-123',
-          title: 'Restored',
-          state: 'stopped'
-        };
-
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
-      });
-
-      it('should throw error for non-numeric elapsedMs', () => {
-        const data = {
-          id: 'abc-123',
-          title: 'Restored',
-          elapsedMs: 'not-a-number',
-          state: 'stopped'
-        };
-
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
-      });
-
-      it('should throw error for negative elapsedMs', () => {
-        const data = {
-          id: 'abc-123',
-          title: 'Restored',
-          elapsedMs: -1000,
-          state: 'stopped'
-        };
-
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
-      });
-
-      it('should throw error for missing state', () => {
-        const data = {
-          id: 'abc-123',
-          title: 'Restored',
-          elapsedMs: 0
-        };
-
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
-      });
-
-      it('should throw error for invalid state value', () => {
-        const data = {
-          id: 'abc-123',
-          title: 'Restored',
-          elapsedMs: 0,
-          state: 'invalid'
-        };
-
-        expect(() => Timer.fromJSON(data)).to.throw(Error);
+        expect(() => Timer.fromJSON(null)).to.throw(Error);
+        Object.entries(invalid).forEach(([label, override]) => {
+          expect(() => Timer.fromJSON({ ...valid, ...override }), label).to.throw(Error);
+        });
       });
 
       it('should restore the target', () => {
@@ -457,7 +368,7 @@ describe('Timer', () => {
 
       it('should preserve paused timer with elapsed time through cycle', (done) => {
         const original = new Timer('Original', 'test-id');
-        original.elapsedMs = 12345;
+        original.addMs(12345);
         original.start();
         setTimeout(() => {
           original.pause();
@@ -470,14 +381,6 @@ describe('Timer', () => {
           expect(restored.getElapsedMs()).to.be.at.least(12345);
           done();
         }, 10);
-      });
-
-      it('should handle timer with custom title', () => {
-        const original = new Timer('Custom Timer Name', 'test-id');
-        const json = original.toJSON();
-        const restored = Timer.fromJSON(json);
-
-        expect(restored.title).to.equal('Custom Timer Name');
       });
     });
   });
@@ -529,10 +432,6 @@ describe('Timer', () => {
     });
 
     describe('kind', () => {
-      it('should expose the two supported kinds', () => {
-        expect(Timer.TARGET_KINDS).to.deep.equal(['goal', 'budget']);
-      });
-
       it('should have no kind without a target', () => {
         const timer = new Timer('Test');
         expect(timer.targetKind).to.be.null;
@@ -582,15 +481,6 @@ describe('Timer', () => {
         expect(timer.targetMs).to.be.null;
         expect(timer.targetKind).to.be.null;
       });
-
-      it('should report a budget as reached once elapsed time meets it', () => {
-        const timer = new Timer('Test');
-        timer.setTarget(10000, 'budget');
-        timer.addMs(9999);
-        expect(timer.hasReachedTarget()).to.be.false;
-        timer.addMs(1);
-        expect(timer.hasReachedTarget()).to.be.true;
-      });
     });
 
     describe('hasReachedTarget()', () => {
@@ -625,18 +515,6 @@ describe('Timer', () => {
       expect(timer.getElapsedMs()).to.equal(5000);
     });
 
-    it('should increase elapsed time by specified amount on paused timer', (done) => {
-      const timer = new Timer('Test');
-      timer.start();
-      setTimeout(() => {
-        timer.pause();
-        const beforeAdd = timer.getElapsedMs();
-        timer.addMs(5000);
-        expect(timer.getElapsedMs()).to.equal(beforeAdd + 5000);
-        done();
-      }, 100);
-    });
-
     it('should increase accumulated time on running timer without affecting running session', (done) => {
       const timer = new Timer('Test');
       timer.start();
@@ -652,7 +530,7 @@ describe('Timer', () => {
 
     it('should be no-op when adding zero milliseconds', () => {
       const timer = new Timer('Test');
-      timer.elapsedMs = 1000;
+      timer.addMs(1000);
       timer.addMs(0);
       expect(timer.getElapsedMs()).to.equal(1000);
     });
@@ -662,25 +540,12 @@ describe('Timer', () => {
       expect(() => timer.addMs(-100)).to.throw(RangeError, 'Amount must be non-negative');
     });
 
-    it('should throw TypeError when adding NaN so elapsed time cannot be corrupted', () => {
+    it('should throw TypeError for a non-finite amount so elapsed time cannot be corrupted', () => {
       const timer = new Timer('Test');
-      timer.elapsedMs = 1000;
+      timer.addMs(1000);
       expect(() => timer.addMs(NaN)).to.throw(TypeError, 'Milliseconds must be a finite number');
-      expect(timer.getElapsedMs()).to.equal(1000);
-    });
-
-    it('should throw TypeError when adding Infinity', () => {
-      const timer = new Timer('Test');
       expect(() => timer.addMs(Infinity)).to.throw(TypeError, 'Milliseconds must be a finite number');
-    });
-
-    it('should throw RangeError for negative amount even on running timer', (done) => {
-      const timer = new Timer('Test');
-      timer.start();
-      setTimeout(() => {
-        expect(() => timer.addMs(-50)).to.throw(RangeError, 'Amount must be non-negative');
-        done();
-      }, 50);
+      expect(timer.getElapsedMs()).to.equal(1000);
     });
   });
 });

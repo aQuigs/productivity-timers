@@ -123,9 +123,8 @@ export function allocatePercentage(totalMs, percentages, remainderTimerId) {
 
 /**
  * Discards all time (returns empty map)
- * @param {number} totalMs - Total milliseconds (ignored)
  * @returns {Map<string, number>}
  */
-export function allocateDiscard(totalMs) {
+export function allocateDiscard() {
   return new Map();
 }
