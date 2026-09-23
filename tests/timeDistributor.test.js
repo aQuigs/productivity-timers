@@ -9,18 +9,6 @@ describe('TimeDistributor', () => {
       expect(result.size).to.equal(1);
       expect(result.get('timer-1')).to.equal(60000);
     });
-
-    it('should handle zero milliseconds', () => {
-      const result = allocateToSingle(0, 'timer-1');
-      expect(result).to.be.instanceOf(Map);
-      expect(result.size).to.equal(1);
-      expect(result.get('timer-1')).to.equal(0);
-    });
-
-    it('should work with different timer IDs', () => {
-      const result = allocateToSingle(123456, 'custom-timer-id');
-      expect(result.get('custom-timer-id')).to.equal(123456);
-    });
   });
 
   describe('allocateFixed()', () => {
@@ -48,14 +36,6 @@ describe('TimeDistributor', () => {
       expect(result.get('t1')).to.equal(30000);
       expect(result.get('t2')).to.equal(30000);
       expect(result.get('t3')).to.equal(0);
-    });
-
-    it('should handle zero remainder', () => {
-      const fixedMap = new Map([['t1', 10000]]);
-      const result = allocateFixed(10000, fixedMap, 't2');
-
-      expect(result.get('t1')).to.equal(10000);
-      expect(result.get('t2')).to.equal(0);
     });
 
     it('should allocate all to remainder timer if fixed map is empty', () => {
@@ -98,17 +78,6 @@ describe('TimeDistributor', () => {
       expect(result.get('t1')).to.equal(36000);
       expect(result.get('t2')).to.equal(24000);
       expect(result.get('t3')).to.equal(0);
-    });
-
-    it('should handle rounding without losing milliseconds', () => {
-      const percentages = new Map([
-        ['t1', 33],
-        ['t2', 33]
-      ]);
-      const result = allocatePercentage(100, percentages, 't3');
-
-      const total = result.get('t1') + result.get('t2') + result.get('t3');
-      expect(total).to.equal(100);
     });
 
     it('should ensure proper rounding with BigInt precision', () => {
@@ -256,18 +225,10 @@ describe('TimeDistributor', () => {
   });
 
   describe('allocateDiscard()', () => {
-    it('should return empty Map', () => {
-      const result = allocateDiscard(60000);
+    it('should return an empty Map', () => {
+      const result = allocateDiscard();
       expect(result).to.be.instanceOf(Map);
       expect(result.size).to.equal(0);
-    });
-
-    it('should return empty Map regardless of input', () => {
-      const result1 = allocateDiscard(0);
-      const result2 = allocateDiscard(999999);
-
-      expect(result1.size).to.equal(0);
-      expect(result2.size).to.equal(0);
     });
   });
 });

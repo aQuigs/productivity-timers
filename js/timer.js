@@ -94,24 +94,6 @@ export class Timer {
   }
 
   /**
-   * Internal property for testing - direct access to startTimeMs
-   */
-  get startTimeMs() {
-    return this.#startTimeMs;
-  }
-
-  /**
-   * Internal property for testing - direct access to elapsedMs
-   */
-  get elapsedMs() {
-    return this.#elapsedMs;
-  }
-
-  set elapsedMs(value) {
-    this.#elapsedMs = value;
-  }
-
-  /**
    * Optional goal or budget in milliseconds; null when the timer has no target
    */
   get targetMs() {

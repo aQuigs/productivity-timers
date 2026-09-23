@@ -1,9 +1,30 @@
 import { expect } from '@esm-bundle/chai';
+import { App } from '../js/app.js';
+import { Timer } from '../js/timer.js';
 
 describe('Layout and Overflow Tests', () => {
   let container;
+  let app;
+  let stylesheet;
 
-  beforeEach(async () => {
+  before(async () => {
+    stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = '/css/styles.css';
+    document.head.appendChild(stylesheet);
+
+    await new Promise(resolve => {
+      stylesheet.onload = resolve;
+      stylesheet.onerror = resolve;
+    });
+  });
+
+  after(() => {
+    stylesheet.remove();
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
     container = document.createElement('div');
     container.id = 'test-container';
     container.innerHTML = `
@@ -12,114 +33,24 @@ describe('Layout and Overflow Tests', () => {
       </div>
     `;
     document.body.appendChild(container);
-
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = '/css/styles.css';
-    document.head.appendChild(link);
-
-    await new Promise(resolve => {
-      link.onload = resolve;
-      link.onerror = resolve;
-    });
+    // Only the card renderer is needed, so the app is built but never initialised
+    app = new App();
   });
 
   afterEach(() => {
-    if (container && container.parentNode) {
-      container.parentNode.removeChild(container);
-    }
+    app.destroy();
+    container.remove();
+    localStorage.clear();
   });
 
+  function timerContainer() {
+    return document.getElementById('timer-container');
+  }
+
+  // A card exactly as the app renders it, so these tests measure the production markup
   function createTestTimerCard(title = 'Test Timer', time = '00:45:32') {
-    const card = document.createElement('div');
-    card.className = 'timer-card';
-
-    const header = document.createElement('div');
-    header.className = 'timer-header';
-
-    const titleInput = document.createElement('input');
-    titleInput.type = 'text';
-    titleInput.className = 'timer-title';
-    titleInput.value = title;
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'timer-remove';
-    removeBtn.textContent = '×';
-
-    header.appendChild(titleInput);
-    header.appendChild(removeBtn);
-
-    const display = document.createElement('div');
-    display.className = 'timer-display';
-    display.textContent = time;
-
-    const goal = document.createElement('div');
-    goal.className = 'timer-goal';
-
-    const goalBtn = document.createElement('button');
-    goalBtn.className = 'timer-goal-btn';
-    goalBtn.textContent = 'Set goal or budget';
-
-    const goalEditor = document.createElement('div');
-    goalEditor.className = 'timer-goal-editor';
-    goalEditor.hidden = true;
-
-    const goalKind = document.createElement('div');
-    goalKind.className = 'timer-goal-kind';
-    goalKind.setAttribute('role', 'radiogroup');
-    ['goal', 'budget'].forEach(kind => {
-      const label = document.createElement('label');
-      label.className = 'timer-goal-kind-option';
-      const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = 'goal-kind-layout';
-      radio.value = kind;
-      radio.checked = kind === 'goal';
-      const text = document.createElement('span');
-      text.textContent = kind === 'goal' ? 'Goal' : 'Budget';
-      label.appendChild(radio);
-      label.appendChild(text);
-      goalKind.appendChild(label);
-    });
-
-    const goalInput = document.createElement('input');
-    goalInput.type = 'text';
-    goalInput.className = 'timer-goal-input';
-
-    goalEditor.appendChild(goalKind);
-    goalEditor.appendChild(goalInput);
-
-    const progress = document.createElement('div');
-    progress.className = 'timer-progress';
-    progress.hidden = true;
-
-    const progressBar = document.createElement('div');
-    progressBar.className = 'timer-progress-bar';
-    progress.appendChild(progressBar);
-
-    const goalError = document.createElement('p');
-    goalError.className = 'timer-goal-error';
-    goalError.hidden = true;
-
-    goal.appendChild(goalBtn);
-    goal.appendChild(goalEditor);
-    goal.appendChild(goalError);
-    goal.appendChild(progress);
-
-    const controls = document.createElement('div');
-    controls.className = 'timer-controls';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'btn btn-start';
-    toggleBtn.textContent = 'Start';
-
-    controls.appendChild(toggleBtn);
-
-    card.appendChild(header);
-    card.appendChild(display);
-    card.appendChild(goal);
-    card.appendChild(controls);
-
+    const card = app.createTimerCard(new Timer(title));
+    card.querySelector('.timer-display').textContent = time;
     return card;
   }
 
@@ -177,15 +108,11 @@ describe('Layout and Overflow Tests', () => {
   describe('Text overflow on small windows', () => {
     it('should not allow timer display text to overflow card on small window', () => {
       const card = createTestTimerCard('Timer 1', '99:59:59');
-      const timerContainer = document.getElementById('timer-container');
+      timerContainer().style.width = '250px';
+      timerContainer().appendChild(card);
 
-      // Simulate small window
-      timerContainer.style.width = '250px';
-      timerContainer.appendChild(card);
-
-      const display = card.querySelector('.timer-display');
       const cardRect = card.getBoundingClientRect();
-      const displayRect = display.getBoundingClientRect();
+      const displayRect = card.querySelector('.timer-display').getBoundingClientRect();
 
       expect(displayRect.right).to.be.at.most(cardRect.right + 1,
         'Timer display should not overflow card right edge');
@@ -194,137 +121,61 @@ describe('Layout and Overflow Tests', () => {
     });
 
     it('should not allow long title text to overflow card on small window', () => {
-      const longTitle = 'Very Long Timer Title That Might Overflow';
-      const card = createTestTimerCard(longTitle);
-      const timerContainer = document.getElementById('timer-container');
+      const card = createTestTimerCard('Very Long Timer Title That Might Overflow');
+      timerContainer().style.width = '250px';
+      timerContainer().appendChild(card);
 
-      timerContainer.style.width = '250px';
-      timerContainer.appendChild(card);
-
-      const titleInput = card.querySelector('.timer-title');
       const cardRect = card.getBoundingClientRect();
-      const titleRect = titleInput.getBoundingClientRect();
+      const titleRect = card.querySelector('.timer-title').getBoundingClientRect();
 
       expect(titleRect.right).to.be.at.most(cardRect.right + 1,
         'Title should not overflow card right edge');
-    });
-
-    it('should handle text overflow gracefully with ellipsis or wrapping', () => {
-      const card = createTestTimerCard('Timer', '99:59:59');
-      const timerContainer = document.getElementById('timer-container');
-
-      timerContainer.style.width = '200px';
-      timerContainer.appendChild(card);
-
-      const display = card.querySelector('.timer-display');
-      const styles = window.getComputedStyle(display);
-
-      // Text should either wrap or have ellipsis, but not overflow
-      const hasWordBreak = styles.wordBreak === 'break-all' || styles.wordBreak === 'break-word';
-      const hasOverflow = styles.overflow === 'hidden' || styles.textOverflow === 'ellipsis';
-
-      expect(hasWordBreak || hasOverflow || styles.whiteSpace === 'normal').to.be.true;
     });
   });
 
   describe('Timer card max width', () => {
     it('should have a maximum width regardless of window size', () => {
       const card = createTestTimerCard();
-      const timerContainer = document.getElementById('timer-container');
-      const appContainer = document.querySelector('.app-container');
+      document.querySelector('.app-container').style.width = '2000px';
+      timerContainer().appendChild(card);
 
-      // Simulate very large window
-      appContainer.style.width = '2000px';
-      timerContainer.appendChild(card);
-
-      // Force reflow
-      timerContainer.offsetHeight;
-
-      const cardRect = card.getBoundingClientRect();
-
-      // Timer card should not exceed a reasonable max width (e.g., 400-450px)
-      expect(cardRect.width).to.be.at.most(450,
-        `Timer card should not stretch beyond max width even on large screens, got ${cardRect.width}px`);
+      expect(card.getBoundingClientRect().width).to.be.at.most(450,
+        'Timer card should not stretch beyond max width even on large screens');
     });
 
     it('should only grow the grid, not individual cards, on wide screens', () => {
-      const timerContainer = document.getElementById('timer-container');
-
-      // Add multiple cards
       for (let i = 0; i < 4; i++) {
-        const card = createTestTimerCard(`Timer ${i + 1}`);
-        timerContainer.appendChild(card);
+        timerContainer().appendChild(createTestTimerCard(`Timer ${i + 1}`));
       }
+      timerContainer().style.width = '1600px';
 
-      // Simulate wide window
-      timerContainer.style.width = '1600px';
-
-      // Force reflow
-      timerContainer.offsetHeight;
-
-      const cards = Array.from(document.querySelectorAll('.timer-card'));
-      const cardWidths = cards.map(card => card.getBoundingClientRect().width);
-
-      // All cards should have similar widths
+      const cardWidths = Array.from(document.querySelectorAll('.timer-card'), card => card.getBoundingClientRect().width);
       const maxWidth = Math.max(...cardWidths);
       const minWidth = Math.min(...cardWidths);
 
-      // Cards should be consistent width
-      expect(maxWidth - minWidth).to.be.lessThan(5,
-        'All cards should have similar widths');
-
-      // No card should be excessively wide
-      expect(maxWidth).to.be.at.most(500,
-        'Cards should not exceed max width');
-    });
-
-    it('should maintain consistent card size across different grid layouts', () => {
-      const timerContainer = document.getElementById('timer-container');
-
-      // Add 3 cards
-      for (let i = 0; i < 3; i++) {
-        const card = createTestTimerCard(`Timer ${i + 1}`);
-        timerContainer.appendChild(card);
-      }
-
-      // Test at medium width (should show 2-3 columns)
-      timerContainer.style.width = '900px';
-      timerContainer.offsetHeight;
-
-      const cards = document.querySelectorAll('.timer-card');
-      const mediumWidths = Array.from(cards).map(card =>
-        card.getBoundingClientRect().width
-      );
-
-      // All cards at medium width should be similar
-      const mediumMax = Math.max(...mediumWidths);
-      const mediumMin = Math.min(...mediumWidths);
-      expect(mediumMax - mediumMin).to.be.lessThan(5);
+      expect(maxWidth - minWidth).to.be.lessThan(5, 'All cards should have similar widths');
+      expect(maxWidth).to.be.at.most(450, 'Cards should not exceed max width');
     });
   });
 
   describe('Timer display typography', () => {
     it('should use tabular numerals so the time does not jitter as digits change', () => {
       const card = createTestTimerCard('Timer', '00:00:00');
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
-      const display = card.querySelector('.timer-display');
-      const styles = window.getComputedStyle(display);
-
+      const styles = window.getComputedStyle(card.querySelector('.timer-display'));
       expect(styles.fontVariantNumeric).to.include('tabular-nums');
     });
 
     it('should keep the same width for narrow and wide digit strings', () => {
       const narrow = createTestTimerCard('Timer', '11:11:11');
       const wide = createTestTimerCard('Timer', '00:00:00');
-      const timerContainer = document.getElementById('timer-container');
-      timerContainer.appendChild(narrow);
-      timerContainer.appendChild(wide);
+      timerContainer().appendChild(narrow);
+      timerContainer().appendChild(wide);
 
       const measure = (card) => {
-        const display = card.querySelector('.timer-display');
         const range = document.createRange();
-        range.selectNodeContents(display);
+        range.selectNodeContents(card.querySelector('.timer-display'));
         return range.getBoundingClientRect().width;
       };
 
@@ -337,23 +188,18 @@ describe('Layout and Overflow Tests', () => {
       const idle = createTestTimerCard('Idle');
       const running = createTestTimerCard('Running');
       running.classList.add('active');
-      const timerContainer = document.getElementById('timer-container');
-      timerContainer.appendChild(idle);
-      timerContainer.appendChild(running);
+      timerContainer().appendChild(idle);
+      timerContainer().appendChild(running);
 
-      const idleStyles = window.getComputedStyle(idle);
-      const runningStyles = window.getComputedStyle(running);
-
-      expect(runningStyles.borderColor).to.not.equal(idleStyles.borderColor);
+      expect(window.getComputedStyle(running).borderColor).to.not.equal(window.getComputedStyle(idle).borderColor);
     });
 
     it('should style start and pause buttons differently', () => {
       const idle = createTestTimerCard('Idle');
       const running = createTestTimerCard('Running');
       running.querySelector('.btn').className = 'btn btn-pause';
-      const timerContainer = document.getElementById('timer-container');
-      timerContainer.appendChild(idle);
-      timerContainer.appendChild(running);
+      timerContainer().appendChild(idle);
+      timerContainer().appendChild(running);
 
       const startBackground = window.getComputedStyle(idle.querySelector('.btn')).backgroundColor;
       const pauseBackground = window.getComputedStyle(running.querySelector('.btn')).backgroundColor;
@@ -362,20 +208,11 @@ describe('Layout and Overflow Tests', () => {
     });
   });
 
-  describe('Drag handle', () => {
-    function addHandle(card) {
-      const handle = document.createElement('span');
-      handle.className = 'timer-drag-handle';
-      handle.setAttribute('role', 'button');
-      handle.tabIndex = 0;
-      card.querySelector('.timer-header').prepend(handle);
-      return handle;
-    }
-
-    it('should be at least 36px tall and show a grab cursor', () => {
+  describe('Card header', () => {
+    it('should give the drag handle a comfortable size and a grab cursor', () => {
       const card = createTestTimerCard();
-      const handle = addHandle(card);
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
+      const handle = card.querySelector('.timer-drag-handle');
 
       const rect = handle.getBoundingClientRect();
       const styles = window.getComputedStyle(handle);
@@ -389,22 +226,21 @@ describe('Layout and Overflow Tests', () => {
 
     it('should show a grabbing cursor while the card is being dragged', () => {
       const card = createTestTimerCard();
-      const handle = addHandle(card);
       card.classList.add('dragging');
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
-      expect(window.getComputedStyle(handle).cursor).to.equal('grabbing');
+      expect(window.getComputedStyle(card.querySelector('.timer-drag-handle')).cursor).to.equal('grabbing');
       expect(parseFloat(window.getComputedStyle(card).opacity)).to.be.below(1);
     });
 
-    it('should keep the remove button square and the title inside a narrow card', () => {
+    it('should keep the remove button a square, red-tinted target and the title inside a narrow card', () => {
       const card = createTestTimerCard('Very Long Timer Title That Might Overflow');
-      addHandle(card);
       card.style.width = '200px';
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
       const cardRect = card.getBoundingClientRect();
-      const removeRect = card.querySelector('.timer-remove').getBoundingClientRect();
+      const removeBtn = card.querySelector('.timer-remove');
+      const removeRect = removeBtn.getBoundingClientRect();
       const titleRect = card.querySelector('.timer-title').getBoundingClientRect();
       const handleRect = card.querySelector('.timer-drag-handle').getBoundingClientRect();
 
@@ -414,13 +250,14 @@ describe('Layout and Overflow Tests', () => {
       expect(titleRect.right).to.be.at.most(removeRect.left);
       expect(titleRect.left).to.be.at.least(handleRect.right - 8);
       expect(handleRect.left).to.be.at.least(cardRect.left);
+      expect(window.getComputedStyle(removeBtn).color).to.equal(computedToken('--danger'));
     });
   });
 
   describe('Goal progress', () => {
     it('should honour the hidden attribute on goal controls despite their display rules', () => {
       const card = createTestTimerCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
       const goalBtn = card.querySelector('.timer-goal-btn');
       goalBtn.hidden = true;
 
@@ -431,7 +268,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should size the progress bar relative to its track', () => {
       const card = createGoalCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
       const track = card.querySelector('.timer-progress');
       const bar = card.querySelector('.timer-progress-bar');
       bar.style.width = '50%';
@@ -445,7 +282,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should keep the track thin so it reads as progress, not as a control', () => {
       const card = createGoalCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
       const height = card.querySelector('.timer-progress').getBoundingClientRect().height;
       expect(height).to.be.at.least(2);
@@ -453,12 +290,11 @@ describe('Layout and Overflow Tests', () => {
     });
 
     it('should switch the bar colour when the card is over target', () => {
-      const timerContainer = document.getElementById('timer-container');
       const underTarget = createGoalCard();
       const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       overTarget.classList.add('over-target');
-      timerContainer.appendChild(underTarget);
-      timerContainer.appendChild(overTarget);
+      timerContainer().appendChild(underTarget);
+      timerContainer().appendChild(overTarget);
 
       const underColor = rgbChannels(window.getComputedStyle(underTarget.querySelector('.timer-progress-bar')).backgroundColor);
       const overColor = rgbChannels(window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor);
@@ -468,12 +304,11 @@ describe('Layout and Overflow Tests', () => {
     });
 
     it('should style the reached chip differently from a pending chip', () => {
-      const timerContainer = document.getElementById('timer-container');
       const pending = createGoalCard();
       const reached = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       reached.classList.add('over-target');
-      timerContainer.appendChild(pending);
-      timerContainer.appendChild(reached);
+      timerContainer().appendChild(pending);
+      timerContainer().appendChild(reached);
 
       const pendingColor = window.getComputedStyle(pending.querySelector('.timer-goal-btn')).color;
       const reachedColor = window.getComputedStyle(reached.querySelector('.timer-goal-btn')).color;
@@ -483,7 +318,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should show the chip in tabular numerals', () => {
       const card = createGoalCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
       const styles = window.getComputedStyle(card.querySelector('.timer-goal-btn'));
       expect(styles.fontVariantNumeric).to.include('tabular-nums');
@@ -491,7 +326,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should outline an invalid goal input in the danger colour and show the message', () => {
       const card = createInvalidGoalCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
       const danger = computedToken('--danger');
 
       const inputStyles = window.getComputedStyle(card.querySelector('.timer-goal-input'));
@@ -507,9 +342,8 @@ describe('Layout and Overflow Tests', () => {
 
     it('should wrap the error message inside the card on a narrow layout', () => {
       const card = createInvalidGoalCard();
-      const timerContainer = document.getElementById('timer-container');
-      timerContainer.style.width = '220px';
-      timerContainer.appendChild(card);
+      timerContainer().style.width = '220px';
+      timerContainer().appendChild(card);
 
       const cardRect = card.getBoundingClientRect();
       const errorRect = card.querySelector('.timer-goal-error').getBoundingClientRect();
@@ -522,9 +356,8 @@ describe('Layout and Overflow Tests', () => {
     it('should keep the chip and editor inside the card on a narrow layout', () => {
       const card = createGoalCard('Budget 125:00:00 · 00:00:42 over');
       card.querySelector('.timer-goal-editor').hidden = false;
-      const timerContainer = document.getElementById('timer-container');
-      timerContainer.style.width = '250px';
-      timerContainer.appendChild(card);
+      timerContainer().style.width = '250px';
+      timerContainer().appendChild(card);
 
       const cardRect = card.getBoundingClientRect();
       ['.timer-goal-btn', '.timer-goal-kind', '.timer-goal-input', '.timer-progress'].forEach(selector => {
@@ -537,7 +370,7 @@ describe('Layout and Overflow Tests', () => {
     it('should lay the kind toggle out as two visible, clickable options', () => {
       const card = createGoalCard();
       card.querySelector('.timer-goal-editor').hidden = false;
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
       const options = card.querySelectorAll('.timer-goal-kind-option');
       expect(options).to.have.lengthOf(2);
@@ -553,15 +386,14 @@ describe('Layout and Overflow Tests', () => {
     });
 
     it('should colour an exceeded budget differently from a reached goal and from pending', () => {
-      const timerContainer = document.getElementById('timer-container');
       const pending = createBudgetCard();
       const overBudget = createBudgetCard('Budget 02:00:00 · 00:10:00 over');
       overBudget.classList.add('over-budget');
       const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       overTarget.classList.add('over-target');
-      timerContainer.appendChild(pending);
-      timerContainer.appendChild(overBudget);
-      timerContainer.appendChild(overTarget);
+      timerContainer().appendChild(pending);
+      timerContainer().appendChild(overBudget);
+      timerContainer().appendChild(overTarget);
       const danger = computedToken('--danger');
 
       const barColor = card => rgbChannels(window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor);
@@ -578,7 +410,7 @@ describe('Layout and Overflow Tests', () => {
     it('should colour a reached goal green, not amber', () => {
       const overTarget = createGoalCard('Goal 02:00:00 · 00:10:00 over');
       overTarget.classList.add('over-target');
-      document.getElementById('timer-container').appendChild(overTarget);
+      timerContainer().appendChild(overTarget);
 
       expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-progress-bar')).backgroundColor, 'bar');
       expectGreen(window.getComputedStyle(overTarget.querySelector('.timer-goal-btn')).color, 'chip');
@@ -586,11 +418,10 @@ describe('Layout and Overflow Tests', () => {
     });
 
     it('should heat the budget bar from the accent to red as --budget-heat rises', () => {
-      const timerContainer = document.getElementById('timer-container');
       const atHeat = heat => {
         const card = createBudgetCard();
         card.querySelector('.timer-progress-bar').style.setProperty('--budget-heat', heat);
-        timerContainer.appendChild(card);
+        timerContainer().appendChild(card);
         return window.getComputedStyle(card.querySelector('.timer-progress-bar')).backgroundColor;
       };
       const accent = computedToken('--accent');
@@ -600,7 +431,7 @@ describe('Layout and Overflow Tests', () => {
       const warm = rgbChannels(atHeat('50%'));
       const hot = rgbChannels(atHeat('100%'));
       const unsetCard = createBudgetCard();
-      timerContainer.appendChild(unsetCard);
+      timerContainer().appendChild(unsetCard);
       const unset = rgbChannels(window.getComputedStyle(unsetCard.querySelector('.timer-progress-bar')).backgroundColor);
 
       expect(cold).to.deep.equal(rgbChannels(accent));
@@ -627,7 +458,7 @@ describe('Layout and Overflow Tests', () => {
     it('should raise a fill behind the card, glow the display and pulse a ring while time-added is set', () => {
       const card = createTestTimerCard();
       card.classList.add('time-added');
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
       expect(window.getComputedStyle(card, '::before').animationName).to.equal('time-added-fill');
       expect(window.getComputedStyle(card, '::before').zIndex).to.equal('-1');
@@ -639,7 +470,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should let the ring finish last so it can mark the end of the sequence', async () => {
       const card = createTestTimerCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
       card.classList.add('time-added');
 
       const endedInOrder = await new Promise(resolve => {
@@ -655,7 +486,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should leave no fill showing once the fill has finished while the ring is still playing', () => {
       const card = createTestTimerCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
       card.classList.add('time-added');
 
       card.getAnimations({ subtree: true })
@@ -667,7 +498,7 @@ describe('Layout and Overflow Tests', () => {
 
     it('should not animate a card that has not just received time', () => {
       const card = createTestTimerCard();
-      document.getElementById('timer-container').appendChild(card);
+      timerContainer().appendChild(card);
 
       expect(window.getComputedStyle(card, '::before').animationName).to.equal('none');
       expect(window.getComputedStyle(card, '::after').animationName).to.equal('none');

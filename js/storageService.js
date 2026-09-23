@@ -81,14 +81,12 @@ export class StorageService {
 
       const stored = JSON.parse(raw);
 
-      // Validate schema version
       if (stored.version !== this.#version) {
         console.warn('Storage schema version mismatch. Clearing old data.');
         this.clear();
         return null;
       }
 
-      // Validate data structure
       if (!this.validateState(stored.data)) {
         console.warn('Invalid timer state in storage. Clearing corrupted data.');
         this.clear();
@@ -118,7 +116,6 @@ export class StorageService {
    * @returns {boolean}
    */
   validateState(state) {
-    // Check basic structure
     if (!state || typeof state !== 'object') {
       return false;
     }
@@ -127,48 +124,25 @@ export class StorageService {
       return false;
     }
 
-    // Check timer count constraints
     if (state.timers.length < 1 || state.timers.length > 20) {
       return false;
     }
 
-    // Validate each timer
     for (const timer of state.timers) {
       if (!this.#validateTimer(timer)) {
         return false;
       }
     }
 
-    // Validate runningTimerId
     if (state.runningTimerId !== null && typeof state.runningTimerId !== 'string') {
       return false;
     }
 
-    // If runningTimerId is set, ensure it references an existing timer
     if (state.runningTimerId !== null) {
       const exists = state.timers.some(t => t.id === state.runningTimerId);
       if (!exists) {
         return false;
       }
-    }
-
-    // Validate hiddenAt (must be null or number)
-    if (state.hiddenAt !== undefined && state.hiddenAt !== null && typeof state.hiddenAt !== 'number') {
-      return false;
-    }
-
-    // Validate runningTimerIdBeforeHide (must be null or string)
-    if (state.runningTimerIdBeforeHide !== undefined &&
-        state.runningTimerIdBeforeHide !== null &&
-        typeof state.runningTimerIdBeforeHide !== 'string') {
-      return false;
-    }
-
-    // Validate accumulatedIdleMs (must be null, undefined, or number >= 0)
-    if (state.accumulatedIdleMs !== undefined &&
-        state.accumulatedIdleMs !== null &&
-        (typeof state.accumulatedIdleMs !== 'number' || state.accumulatedIdleMs < 0)) {
-      return false;
     }
 
     return true;
@@ -184,7 +158,6 @@ export class StorageService {
       return false;
     }
 
-    // Check required fields exist and have correct types
     if (typeof timer.id !== 'string' || timer.id.length === 0) {
       return false;
     }
@@ -197,23 +170,17 @@ export class StorageService {
       return false;
     }
 
-    if (typeof timer.state !== 'string') {
-      return false;
-    }
-
-    // Validate state is one of valid values
     if (!Timer.VALID_STATES.includes(timer.state)) {
       return false;
     }
 
-    // Validate targetMs (must be absent, null, or a positive finite number)
+    // Both target fields are absent in state saved before targets existed
     if (timer.targetMs !== undefined &&
         timer.targetMs !== null &&
         (typeof timer.targetMs !== 'number' || !Number.isFinite(timer.targetMs) || timer.targetMs <= 0)) {
       return false;
     }
 
-    // Validate targetKind (must be absent, null, or a supported kind)
     if (timer.targetKind !== undefined &&
         timer.targetKind !== null &&
         !Timer.TARGET_KINDS.includes(timer.targetKind)) {

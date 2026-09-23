@@ -5,6 +5,13 @@ import { atPreviewPath } from './helpers.js';
 describe('StorageService', () => {
   let storage;
 
+  function stateWith(timer, runningTimerId = null) {
+    return {
+      timers: [{ id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped', ...timer }],
+      runningTimerId
+    };
+  }
+
   beforeEach(() => {
     localStorage.clear();
     storage = new StorageService();
@@ -14,225 +21,69 @@ describe('StorageService', () => {
     localStorage.clear();
   });
 
-  describe('Schema Extension - Idle State Fields', () => {
-    it('should save and load hiddenAt field', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null,
-        hiddenAt: Date.now()
-      };
-
-      expect(storage.save(state)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded.hiddenAt).to.equal(state.hiddenAt);
-    });
-
-    it('should save and load hiddenAt as null', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null,
-        hiddenAt: null
-      };
-
-      expect(storage.save(state)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded.hiddenAt).to.be.null;
-    });
-
-    it('should save and load runningTimerIdBeforeHide field', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null,
-        hiddenAt: Date.now(),
-        runningTimerIdBeforeHide: 'abc'
-      };
-
-      expect(storage.save(state)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded.runningTimerIdBeforeHide).to.equal('abc');
-    });
-
-    it('should save and load runningTimerIdBeforeHide as null', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null,
-        hiddenAt: null,
-        runningTimerIdBeforeHide: null
-      };
-
-      expect(storage.save(state)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded.runningTimerIdBeforeHide).to.be.null;
-    });
-
-    it('should reject invalid hiddenAt type', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null,
-        hiddenAt: 'invalid-string'
-      };
-
-      expect(storage.save(state)).to.be.false;
-    });
-
-    it('should reject invalid runningTimerIdBeforeHide type', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null,
-        hiddenAt: null,
-        runningTimerIdBeforeHide: 123
-      };
-
-      expect(storage.save(state)).to.be.false;
-    });
-
-    it('should load old schema without new fields', () => {
-      const oldState = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null
-      };
-
-      expect(storage.save(oldState)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded.hiddenAt).to.be.undefined;
-      expect(loaded.runningTimerIdBeforeHide).to.be.undefined;
-    });
-  });
-
   describe('Schema Extension - Timer Target', () => {
-    function stateWithTarget(targetMs) {
-      return {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped', targetMs }
-        ],
-        runningTimerId: null
-      };
-    }
-
     it('should save and load a positive targetMs', () => {
-      expect(storage.save(stateWithTarget(1500000))).to.be.true;
+      expect(storage.save(stateWith({ targetMs: 1500000 }))).to.be.true;
       expect(storage.load().timers[0].targetMs).to.equal(1500000);
     });
 
-    it('should accept a null targetMs', () => {
-      expect(storage.validateState(stateWithTarget(null))).to.be.true;
-    });
-
-    it('should accept a timer without a targetMs field', () => {
-      const state = {
-        timers: [{ id: 'abc', title: 'Timer 1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.true;
+    it('should accept a null or absent targetMs', () => {
+      expect(storage.validateState(stateWith({ targetMs: null }))).to.be.true;
+      expect(storage.validateState(stateWith({}))).to.be.true;
     });
 
     it('should reject a non-numeric targetMs', () => {
-      expect(storage.validateState(stateWithTarget('25m'))).to.be.false;
-      expect(storage.validateState(stateWithTarget(true))).to.be.false;
+      expect(storage.validateState(stateWith({ targetMs: '25m' }))).to.be.false;
+      expect(storage.validateState(stateWith({ targetMs: true }))).to.be.false;
     });
 
     it('should reject a zero or negative targetMs', () => {
-      expect(storage.validateState(stateWithTarget(0))).to.be.false;
-      expect(storage.validateState(stateWithTarget(-1000))).to.be.false;
+      expect(storage.validateState(stateWith({ targetMs: 0 }))).to.be.false;
+      expect(storage.validateState(stateWith({ targetMs: -1000 }))).to.be.false;
     });
 
     it('should reject a non-finite targetMs', () => {
-      expect(storage.validateState(stateWithTarget(NaN))).to.be.false;
-      expect(storage.validateState(stateWithTarget(Infinity))).to.be.false;
+      expect(storage.validateState(stateWith({ targetMs: NaN }))).to.be.false;
+      expect(storage.validateState(stateWith({ targetMs: Infinity }))).to.be.false;
     });
 
     describe('targetKind', () => {
-      function stateWithKind(targetKind, targetMs = 1500000) {
-        return {
-          timers: [
-            { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped', targetMs, targetKind }
-          ],
-          runningTimerId: null
-        };
+      function withKind(targetKind) {
+        return stateWith({ targetMs: 1500000, targetKind });
       }
 
       it('should save and load a goal or budget kind', () => {
-        expect(storage.save(stateWithKind('budget'))).to.be.true;
+        expect(storage.save(withKind('budget'))).to.be.true;
         expect(storage.load().timers[0].targetKind).to.equal('budget');
-        expect(storage.save(stateWithKind('goal'))).to.be.true;
+        expect(storage.save(withKind('goal'))).to.be.true;
         expect(storage.load().timers[0].targetKind).to.equal('goal');
       });
 
       it('should accept a null or absent targetKind', () => {
-        expect(storage.validateState(stateWithKind(null))).to.be.true;
-        expect(storage.validateState(stateWithTarget(1500000))).to.be.true;
+        expect(storage.validateState(withKind(null))).to.be.true;
+        expect(storage.validateState(stateWith({ targetMs: 1500000 }))).to.be.true;
       });
 
       it('should reject an unknown targetKind', () => {
-        expect(storage.validateState(stateWithKind('limit'))).to.be.false;
-        expect(storage.validateState(stateWithKind('Goal'))).to.be.false;
-        expect(storage.validateState(stateWithKind(''))).to.be.false;
+        expect(storage.validateState(withKind('limit'))).to.be.false;
+        expect(storage.validateState(withKind('Goal'))).to.be.false;
+        expect(storage.validateState(withKind(''))).to.be.false;
       });
 
       it('should reject a non-string targetKind', () => {
-        expect(storage.validateState(stateWithKind(1))).to.be.false;
-        expect(storage.validateState(stateWithKind(true))).to.be.false;
-        expect(storage.validateState(stateWithKind({}))).to.be.false;
+        expect(storage.validateState(withKind(1))).to.be.false;
+        expect(storage.validateState(withKind(true))).to.be.false;
+        expect(storage.validateState(withKind({}))).to.be.false;
       });
-    });
-  });
-
-  describe('Constructor', () => {
-    it('should create a StorageService with default storage key', () => {
-      expect(storage).to.be.instanceOf(StorageService);
-    });
-
-    it('should create a StorageService with custom storage key', () => {
-      const customStorage = new StorageService('custom-key');
-      expect(customStorage).to.be.instanceOf(StorageService);
-    });
-
-    it('should detect localStorage availability', () => {
-      expect(storage.available).to.be.true;
     });
   });
 
   describe('save() and load()', () => {
     it('should save and load valid state', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' }
-        ],
-        runningTimerId: null
-      };
+      const state = stateWith({});
 
       expect(storage.save(state)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded).to.deep.equal(state);
-    });
-
-    it('should save multiple timers', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 1000, state: 'stopped' },
-          { id: 'def', title: 'Timer 2', elapsedMs: 5000, state: 'paused' },
-          { id: 'ghi', title: 'Timer 3', elapsedMs: 0, state: 'stopped' }
-        ],
-        runningTimerId: null
-      };
-
-      expect(storage.save(state)).to.be.true;
-      const loaded = storage.load();
-      expect(loaded).to.deep.equal(state);
+      expect(storage.load()).to.deep.equal(state);
     });
 
     it('should load a reordered timer list back in the same order', () => {
@@ -268,16 +119,10 @@ describe('StorageService', () => {
     });
 
     it('should include version and timestamp in stored data', () => {
-      const state = {
-        timers: [
-          { id: 'abc', title: 'Timer 1', elapsedMs: 0, state: 'stopped' }
-        ],
-        runningTimerId: null
-      };
+      const state = stateWith({});
 
       storage.save(state);
-      const raw = localStorage.getItem('productivity-timers-v1');
-      const stored = JSON.parse(raw);
+      const stored = JSON.parse(localStorage.getItem('productivity-timers-v1'));
 
       expect(stored.version).to.equal(1);
       expect(stored.timestamp).to.be.a('number');
@@ -288,10 +133,7 @@ describe('StorageService', () => {
       const invalidVersionData = {
         version: 999,
         timestamp: Date.now(),
-        data: {
-          timers: [{ id: 'abc', title: 'Timer 1', elapsedMs: 0, state: 'stopped' }],
-          runningTimerId: null
-        }
+        data: stateWith({})
       };
 
       localStorage.setItem('productivity-timers-v1', JSON.stringify(invalidVersionData));
@@ -301,25 +143,6 @@ describe('StorageService', () => {
   });
 
   describe('validateState()', () => {
-    it('should accept valid state with one timer', () => {
-      const state = {
-        timers: [{ id: 'a', title: 'T1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.true;
-    });
-
-    it('should accept valid state with multiple timers', () => {
-      const state = {
-        timers: [
-          { id: 'a', title: 'T1', elapsedMs: 0, state: 'stopped' },
-          { id: 'b', title: 'T2', elapsedMs: 5000, state: 'paused' }
-        ],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.true;
-    });
-
     it('should accept valid state with runningTimerId', () => {
       const state = {
         timers: [
@@ -332,13 +155,12 @@ describe('StorageService', () => {
     });
 
     it('should reject state with no timers array', () => {
-      const state = { runningTimerId: null };
-      expect(storage.validateState(state)).to.be.false;
+      expect(storage.validateState({ runningTimerId: null })).to.be.false;
+      expect(storage.validateState({ timers: 'not-an-array', runningTimerId: null })).to.be.false;
     });
 
     it('should reject state with empty timers array', () => {
-      const state = { timers: [], runningTimerId: null };
-      expect(storage.validateState(state)).to.be.false;
+      expect(storage.validateState({ timers: [], runningTimerId: null })).to.be.false;
     });
 
     it('should reject state with more than 20 timers', () => {
@@ -354,95 +176,31 @@ describe('StorageService', () => {
       expect(storage.validateState(state)).to.be.false;
     });
 
-    it('should reject timer missing id', () => {
-      const state = {
-        timers: [{ title: 'T1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
-    it('should reject timer missing title', () => {
-      const state = {
-        timers: [{ id: 'a', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
-    it('should reject timer missing elapsedMs', () => {
-      const state = {
-        timers: [{ id: 'a', title: 'T1', state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
-    it('should reject timer missing state', () => {
-      const state = {
-        timers: [{ id: 'a', title: 'T1', elapsedMs: 0 }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
-    it('should reject timer with invalid state value', () => {
-      const state = {
-        timers: [{ id: 'a', title: 'T1', elapsedMs: 0, state: 'invalid' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
     it('should reject invalid runningTimerId reference', () => {
-      const state = {
-        timers: [{ id: 'a', title: 'T1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: 'nonexistent'
-      };
-      expect(storage.validateState(state)).to.be.false;
+      expect(storage.validateState(stateWith({}, 'nonexistent'))).to.be.false;
     });
 
-    it('should reject state with non-array timers', () => {
-      const state = {
-        timers: 'not-an-array',
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
+    const invalidTimers = {
+      'missing id': { id: undefined },
+      'non-string id': { id: 123 },
+      'missing title': { title: undefined },
+      'non-string title': { title: 123 },
+      'missing elapsedMs': { elapsedMs: undefined },
+      'non-number elapsedMs': { elapsedMs: '1000' },
+      'missing state': { state: undefined },
+      'invalid state value': { state: 'invalid' }
+    };
 
-    it('should reject timer with non-string id', () => {
-      const state = {
-        timers: [{ id: 123, title: 'T1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
-    it('should reject timer with non-string title', () => {
-      const state = {
-        timers: [{ id: 'a', title: 123, elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
-    });
-
-    it('should reject timer with non-number elapsedMs', () => {
-      const state = {
-        timers: [{ id: 'a', title: 'T1', elapsedMs: '1000', state: 'stopped' }],
-        runningTimerId: null
-      };
-      expect(storage.validateState(state)).to.be.false;
+    Object.entries(invalidTimers).forEach(([label, override]) => {
+      it(`should reject a timer with ${label}`, () => {
+        expect(storage.validateState(stateWith(override))).to.be.false;
+      });
     });
   });
 
   describe('clear()', () => {
     it('should clear stored data', () => {
-      const state = {
-        timers: [{ id: 'abc', title: 'Timer 1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-
-      storage.save(state);
+      storage.save(stateWith({}));
       expect(localStorage.getItem('productivity-timers-v1')).to.not.be.null;
 
       storage.clear();
@@ -455,12 +213,7 @@ describe('StorageService', () => {
       const brokenStorage = new StorageService();
       Object.defineProperty(brokenStorage, 'available', { value: false });
 
-      const state = {
-        timers: [{ id: 'abc', title: 'Timer 1', elapsedMs: 0, state: 'stopped' }],
-        runningTimerId: null
-      };
-
-      expect(brokenStorage.save(state)).to.be.false;
+      expect(brokenStorage.save(stateWith({}))).to.be.false;
     });
 
     it('should return null for load when localStorage unavailable', () => {

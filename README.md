@@ -11,7 +11,7 @@ A browser-based time tracker with multiple timers that function like a chess clo
 - ➕/➖ Dynamic add/remove timers
 - 🌐 Static deployment to GitHub Pages
 - 📲 Installable as an app (PWA) that keeps working offline
-- 🎯 No persistence (session-based tracking)
+- 💾 Timer state persists in localStorage across reloads
 
 ## Quick Start
 
@@ -85,7 +85,8 @@ A browser-based time tracker with multiple timers that function like a chess clo
 ├── tests/
 │   ├── timer.test.js       # Unit tests for Timer class
 │   ├── timerManager.test.js # Unit tests for TimerManager class
-│   └── integration.test.js # Integration tests
+│   ├── app.test.js         # App flows driven through the DOM
+│   └── layout.test.js      # CSS contracts
 └── specs/
     └── 001-time-tracker/   # Design documentation
 ```
@@ -142,7 +143,7 @@ Tested on modern browsers released within the last 2 years:
 
 - **No framework**: Intentionally avoiding React/Vue/Angular to keep it simple and lightweight
 - **No backend**: Fully client-side application
-- **No persistence**: Timer data is session-based only (future enhancement)
+- **localStorage persistence**: Timer state survives reloads; the running timer resumes and time spent away is offered back through the idle-time dialog
 - **performance.now()**: Uses high-resolution timing for accuracy (not affected by system clock changes)
 - **Mutual exclusivity**: Enforced at the TimerManager level
 

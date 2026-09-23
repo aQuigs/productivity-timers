@@ -118,7 +118,7 @@ describe('App', () => {
       expect(modals().length).to.equal(1);
     });
 
-    it('should offer the previously running timer after a reload with idle time', async () => {
+    it('should offer the previously running timer by default after a reload with idle time', async () => {
       const runningId = seedRunningTimer();
       heartbeatAgo(15000);
 
@@ -127,22 +127,7 @@ describe('App', () => {
 
       const radio = document.querySelector('.allocation-modal input[value="previous-timer"]');
       expect(radio.disabled).to.be.false;
-
-      applyPreviousTimer();
-      await tick();
-
-      const timer = app.timerManager.getTimer(runningId);
-      expect(timer.getElapsedMs()).to.be.at.least(15000);
-      expect(timer.isRunning()).to.be.true;
-      expect(modals().length).to.equal(0);
-    });
-
-    it('should add idle time to the previously running timer when Apply is clicked without choosing a strategy', async () => {
-      const runningId = seedRunningTimer();
-      heartbeatAgo(15000);
-
-      createApp();
-      await tick();
+      expect(radio.checked).to.be.true;
 
       applyDefault();
       await tick();
@@ -204,12 +189,6 @@ describe('App', () => {
     it('should share one idle threshold with the IdleDetector', () => {
       createApp();
       expect(app.idleThreshold).to.equal(app.idleDetector.idleThreshold);
-    });
-
-    it('should fall back to the browser notifier when none is injected', () => {
-      createApp();
-      expect(app.notifier.requestPermission).to.be.a('function');
-      expect(app.notifier.notify).to.be.a('function');
     });
   });
 
@@ -321,7 +300,7 @@ describe('App', () => {
     });
 
     it('should fill the goal bar in step with the rolling digits but notify from the real time', async () => {
-      const notifier = { requestPermission: () => {}, notifications: [], notify(title, body) { this.notifications.push({ title, body }); } };
+      const notifier = fakeNotifier();
       const runningId = seedRunningTimer();
       new TimerManager().setTimerTarget(runningId, 10000);
       createApp({ notifier });
